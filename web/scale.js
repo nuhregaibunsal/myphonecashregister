@@ -7,7 +7,9 @@
     valStart: 7,
     valLen: 5,
     valType: "weight",
-    pluMatch: "both"
+    pluMatch: "both",
+    unknownScale: "price",
+    unknownName: "Ağırlıklı işlem"
   };
 
   function eanValid(code) {
@@ -30,7 +32,7 @@
     const raw = code.substr(Number(s.valStart), Number(s.valLen));
     if (plu.length !== Number(s.pluLen) || raw.length !== Number(s.valLen)) return null;
     const value = parseInt(raw, 10);
-    const out = { prefix, plu, pluNum: parseInt(plu, 10), valType: s.valType };
+    const out = { prefix, plu, pluNum: parseInt(plu, 10), valType: s.valType, raw: value };
     if (s.valType === "price") out.amount = value / 100;
     else out.kg = value / 1000;
     return out;

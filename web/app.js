@@ -94,6 +94,12 @@
   function addFromCode(code, viaCamera) {
     if (!products.length) { flash("Önce Ayarlar'dan ürün listesini yükle.", "warn"); return; }
     const r = lookup(code);
+    if (r && r.notFound && r.scale && settings.unknownScale === "price") {
+      beep(true);
+      const amount = r.scale.raw / 100;
+      pushItem({ ad: settings.unknownName || "Ağırlıklı işlem", fiyat: amount, birim: "ADET", miktar: 1, tutar: amount, kod: code, sabit: true });
+      return;
+    }
     if (!r || r.notFound) {
       const extra = r && r.scale ? " (Terazi PLU " + r.scale.plu + ")" : "";
       flash("Bulunamadı: " + code + extra, "err");
@@ -109,19 +115,19 @@
       pushItem({ ad: p.ad, fiyat: p.fiyat, birim: "KG", miktar: kg, tutar: amount, kod: code, sabit: r.scale.valType === "price" });
       return;
     }
-    if (isKg(p)) {
-      askQty(p, kg => pushItem({ ad: p.ad, fiyat: p.fiyat, birim: "KG", miktar: kg, tutar: kg * p.fiyat, kod: code }));
-      return;
-    }
-    const existing = basket.find(i => i.kod === code && i.birim !== "KG");
+    addUnit(p, code);
+  }
+
+  function addUnit(p, code) {
+    const existing = basket.find(i => i.kod === code && i.birim !== "KG" && !i.sabit);
     if (existing) { existing.miktar += 1; existing.tutar = existing.miktar * existing.fiyat; saveBasket(); flashItem(existing); return; }
-    pushItem({ ad: p.ad, fiyat: p.fiyat, birim: p.birim || "ADET", miktar: 1, tutar: p.fiyat, kod: code });
+    const birim = isKg(p) ? "ADET" : (p.birim || "ADET");
+    pushItem({ ad: p.ad, fiyat: p.fiyat, birim, miktar: 1, tutar: p.fiyat, kod: code });
   }
 
   function addProduct(p) {
     const code = Scale.normCode(String(p.barkod || "").split(/[;,|\s]+/)[0]) || (p.plu ? "PLU" + p.plu : "AD" + p.ad);
-    if (isKg(p)) askQty(p, kg => pushItem({ ad: p.ad, fiyat: p.fiyat, birim: "KG", miktar: kg, tutar: kg * p.fiyat, kod: code }));
-    else pushItem({ ad: p.ad, fiyat: p.fiyat, birim: p.birim || "ADET", miktar: 1, tutar: p.fiyat, kod: code });
+    addUnit(p, code);
   }
 
   function pushItem(item) {
@@ -235,7 +241,7 @@
     $("scanner").hidden = false;
     scanning = true;
     const video = $("video");
-    const constraints = { video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false };
+    const constraints = { video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 }, advanced: [{ focusMode: "continuous" }] }, audio: false };
     try {
       if ("BarcodeDetector" in window) {
         const formats = await BarcodeDetector.getSupportedFormats();
@@ -245,6 +251,7 @@
           stream = await navigator.mediaDevices.getUserMedia(constraints);
           video.srcObject = stream;
           await video.play();
+          tuneCamera(stream);
           const loop = async () => {
             if (!scanning) return;
             try {
@@ -264,14 +271,34 @@
       await zxingReader.decodeFromConstraints(constraints, video, (result) => {
         if (result && scanning) onDetected(result.getText());
       });
+      if (video.srcObject) tuneCamera(video.srcObject);
     } catch (e) {
       stopScan();
       flash("Kamera açılamadı: " + (e && e.message ? e.message : e), "err");
     }
   }
 
+  let camTrack = null, torchOn = false;
+
+  function tuneCamera(s) {
+    camTrack = s && s.getVideoTracks ? s.getVideoTracks()[0] : null;
+    const caps = camTrack && camTrack.getCapabilities ? camTrack.getCapabilities() : {};
+    const adv = {};
+    if (caps.focusMode && caps.focusMode.includes("continuous")) adv.focusMode = "continuous";
+    if (caps.zoom && caps.zoom.max >= 1.5) adv.zoom = Math.min(1.5, caps.zoom.max);
+    if (Object.keys(adv).length) camTrack.applyConstraints({ advanced: [adv] }).catch(() => { });
+    $("torch").hidden = !caps.torch;
+  }
+
+  function toggleTorch() {
+    if (!camTrack) return;
+    torchOn = !torchOn;
+    camTrack.applyConstraints({ advanced: [{ torch: torchOn }] }).catch(() => { torchOn = false; });
+  }
+
   function stopScan() {
     scanning = false;
+    camTrack = null; torchOn = false;
     $("scanner").hidden = true;
     if (zxingReader) { try { zxingReader.reset(); } catch (e) { } zxingReader = null; }
     if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
@@ -295,7 +322,7 @@
     li.innerHTML = '<div class="info"><b></b><span class="muted small"></span></div><strong></strong>';
     li.querySelector("b").textContent = p.ad;
     li.querySelector("span").textContent = [p.barkod, p.plu ? "PLU " + p.plu : ""].filter(Boolean).join(" · ");
-    li.querySelector("strong").textContent = tl(p.fiyat) + (isKg(p) ? "/kg" : "");
+    li.querySelector("strong").textContent = tl(p.fiyat);
     li.onclick = () => onClick(p);
     return li;
   }
@@ -477,7 +504,7 @@
     }
   }
 
-  const SFIELDS = { sPrefixes: "prefixes", sLength: "length", sPluStart: "pluStart", sPluLen: "pluLen", sValStart: "valStart", sValLen: "valLen", sValType: "valType", sPluMatch: "pluMatch" };
+  const SFIELDS = { sPrefixes: "prefixes", sLength: "length", sPluStart: "pluStart", sPluLen: "pluLen", sValStart: "valStart", sValLen: "valLen", sValType: "valType", sPluMatch: "pluMatch", sUnknown: "unknownScale", sUnknownName: "unknownName" };
 
   function fillSettings() { Object.entries(SFIELDS).forEach(([id, k]) => { $(id).value = settings[k]; }); }
 
@@ -497,7 +524,9 @@
     const p = Scale.findByPlu(products, parsed, s);
     let t = "PLU: " + parsed.plu + " · " + (parsed.valType === "price" ? "Tutar: " + tl(parsed.amount) : "Ağırlık: " + kgFmt(parsed.kg) + " kg");
     if (!Scale.eanValid(code)) t += " · Kontrol hanesi hatalı";
-    t += p ? " → " + p.ad + " (" + tl(parsed.valType === "price" ? parsed.amount : parsed.kg * p.fiyat) + ")" : " → ürün listede bulunamadı";
+    if (p) t += " → " + p.ad + " (" + tl(parsed.valType === "price" ? parsed.amount : parsed.kg * p.fiyat) + ")";
+    else if (s.unknownScale === "price") t += " → listede yok, '" + (s.unknownName || "Ağırlıklı işlem") + "' olarak " + tl(parsed.raw / 100) + " eklenir";
+    else t += " → ürün listede bulunamadı";
     $("sTestOut").textContent = t;
   }
 
@@ -505,6 +534,7 @@
     document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => switchTab(b.dataset.tab));
     $("startScan").onclick = startScan;
     $("stopScan").onclick = stopScan;
+    $("torch").onclick = toggleTorch;
     $("manualForm").onsubmit = e => {
       e.preventDefault();
       const v = $("manualInput").value.trim();

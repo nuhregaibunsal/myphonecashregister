@@ -25,6 +25,7 @@
       <video id="video" playsinline muted></video>
       <div class="aim"></div>
       <button class="btn ghost close" id="stopScan" type="button">Kapat</button>
+      <button class="btn ghost torch" id="torch" type="button" hidden>🔦 Işık</button>
     </div>
 
     <div class="row">
@@ -93,6 +94,15 @@
             <option value="both">İkisi de</option>
           </select>
         </label>
+      </div>
+      <div class="grid">
+        <label>Listede olmayan terazi etiketi
+          <select id="sUnknown">
+            <option value="price">Tutarı oku, barkodsuz ürün olarak ekle</option>
+            <option value="none">Bulunamadı de</option>
+          </select>
+        </label>
+        <label>Eklenecek isim<input id="sUnknownName"></label>
       </div>
       <label>Deneme barkodu<input id="sTest" inputmode="numeric" placeholder="örn. 2700012012505"></label>
       <p id="sTestOut" class="msg"></p>
