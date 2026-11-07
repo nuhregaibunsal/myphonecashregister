@@ -72,8 +72,45 @@
     renderInfo();
   }
 
+  let live = false, liveTimer = null;
+
+  async function syncLive() {
+    if (!/^https?:$/.test(location.protocol)) return false;
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 10000);
+    try {
+      const res = await fetch("api/urunler", { cache: "no-store", signal: ctrl.signal });
+      if (!res.ok || !/json/.test(res.headers.get("content-type") || "")) throw new Error(String(res.status));
+      const data = await res.json();
+      if (!Array.isArray(data.products)) throw new Error("liste yok");
+      products = data.products.map(p => ({
+        barkod: Scale.normCode(p.barkod),
+        ad: String(p.ad || "").trim(),
+        fiyat: round2(p.fiyat),
+        birim: String(p.birim || "").trim().toUpperCase(),
+        plu: Scale.normCode(p.plu)
+      })).filter(p => p.ad);
+      meta = { updated: data.updated || Date.now(), source: "Kasa bilgisayarı, canlı" };
+      live = true;
+      await saveProducts();
+      return true;
+    } catch (e) {
+      if (live) { live = false; renderInfo(); }
+      return false;
+    } finally {
+      clearTimeout(t);
+    }
+  }
+
+  async function startLive() {
+    if (await syncLive()) {
+      liveTimer = setInterval(syncLive, 60000);
+      document.addEventListener("visibilitychange", () => { if (!document.hidden) syncLive(); });
+    }
+  }
+
   function renderInfo() {
-    $("dbInfo").textContent = products.length ? products.length + " ürün" : "Liste yok";
+    $("dbInfo").textContent = (live ? "● Canlı · " : "") + (products.length ? products.length + " ürün" : "Liste yok");
     const d = meta.updated ? new Date(meta.updated).toLocaleString("tr-TR") : "-";
     $("dataStats").textContent = products.length + " ürün kayıtlı. Son güncelleme: " + d + (meta.source ? " (" + meta.source + ")" : "");
   }
@@ -120,7 +157,7 @@
   }
 
   function addUnit(p, code) {
-    const existing = basket.find(i => i.kod === code && i.birim !== "KG" && !i.sabit);
+    const existing = basket.find(i => i.kod === code && i.birim !== "KG" && !i.sabit && i.fiyat === p.fiyat);
     if (existing) { existing.miktar += 1; existing.tutar = existing.miktar * existing.fiyat; saveBasket(); flashItem(existing); return; }
     const birim = isKg(p) ? "ADET" : (p.birim || "ADET");
     pushItem({ ad: p.ad, fiyat: p.fiyat, birim, miktar: 1, tutar: p.fiyat, kod: code });
@@ -770,6 +807,6 @@
   bind();
   fillSettings();
   renderBasket();
-  loadProducts();
+  loadProducts().then(startLive);
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => { });
 })();

@@ -60,3 +60,18 @@ Fiyatlar değiştiğinde betiği tekrar çalıştırıp dosyayı yeniden yükley
 
 - `web/` uygulamanın kendisi (statik dosyalar)
 - `araclar/disari-aktar.ps1` SQL Server ve MDB'den CSV çıkarma betiği
+
+## Canlı bağlantı (kasa bilgisayarı)
+
+Telefon, dükkanın Wi-Fi ağındayken fiyatları doğrudan kasa veritabanından okur. CSV gerekmez; kasada değişen fiyat bir dakika içinde telefona gelir.
+
+1. SSMS'te `canli/izin.sql` sorgusunu çalıştırın. Windows hesabına sadece üç tabloyu okuma izni verir, şifre kullanmaz.
+2. Başlat'a sağ tıklayıp **Windows PowerShell (Yönetici)** açın ve şunu yapıştırın:
+
+```powershell
+[Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/nuhregaibunsal/myphonecashregister/HEAD/canli/kur.ps1 | iex
+```
+
+3. Açılan sayfadaki karekodu telefonla okutun. "Bağlantınız gizli değil" uyarısında **Gelişmiş**, sonra **Devam et**.
+
+Kurulum `C:\FiyatGor` klasörüne yapılır. Sunucu Windows oturumu açılınca kendiliğinden başlar ve her açılışta uygulamanın son sürümünü indirir. Kayıtlar `C:\FiyatGor\sunucu.log` dosyasındadır. Kaldırmak için yönetici PowerShell'de `C:\FiyatGor\kaldir.ps1` çalıştırılır.

@@ -1,0 +1,12 @@
+USE master;
+IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = N'DESKTOP-230C94K\User')
+  CREATE LOGIN [DESKTOP-230C94K\User] FROM WINDOWS WITH DEFAULT_DATABASE = UNSALDB;
+GO
+USE UNSALDB;
+IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE sid = SUSER_SID(N'DESKTOP-230C94K\User'))
+  CREATE USER fiyatgor_okuyucu FOR LOGIN [DESKTOP-230C94K\User];
+DECLARE @u sysname = (SELECT name FROM sys.database_principals WHERE sid = SUSER_SID(N'DESKTOP-230C94K\User'));
+EXEC (N'GRANT SELECT ON dbo.F0101TBLSTOKLAR TO ' + N'[' + @u + N']');
+EXEC (N'GRANT SELECT ON dbo.F0101TBLBIRIMLEREX TO ' + N'[' + @u + N']');
+EXEC (N'GRANT SELECT ON dbo.TBLFASTERSTOKLAR TO ' + N'[' + @u + N']');
+SELECT N'Tamam: ' + @u + N' sadece okuma izni aldi' AS Sonuc;
