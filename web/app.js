@@ -223,6 +223,7 @@
   }
 
   let stream = null, scanning = false, zxingReader = null, lastCode = "", lastTime = 0;
+  let camTrack = null, torchOn = false, zoomOn = false, backCams = [], camIndex = -1, detectTimer = null, focusTimer = null;
 
   function onDetected(code) {
     const now = Date.now();
@@ -230,6 +231,31 @@
     if (now - lastTime < 900) return;
     lastCode = code; lastTime = now;
     addFromCode(code, true);
+  }
+
+  function videoConstraints(deviceId) {
+    const v = { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } };
+    if (deviceId) v.deviceId = { exact: deviceId };
+    else v.facingMode = { ideal: "environment" };
+    return { video: v, audio: false };
+  }
+
+  async function listBackCams() {
+    try {
+      const all = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "videoinput");
+      const back = all.filter(d => /back|rear|arka|environment/i.test(d.label));
+      return back.length ? back : all;
+    } catch (e) { return []; }
+  }
+
+  function pickMainCam(list) {
+    const saved = store.get("camId", "");
+    let i = list.findIndex(d => d.deviceId === saved);
+    if (i >= 0) return i;
+    i = list.findIndex(d => /camera2? 0\b|camera 0\b/i.test(d.label));
+    if (i >= 0) return i;
+    i = list.findIndex(d => !/wide|ultra|tele|geniş|depth|macro/i.test(d.label));
+    return i >= 0 ? i : 0;
   }
 
   async function startScan() {
@@ -240,54 +266,69 @@
     }
     $("scanner").hidden = false;
     scanning = true;
-    const video = $("video");
-    const constraints = { video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 }, advanced: [{ focusMode: "continuous" }] }, audio: false };
     try {
-      if ("BarcodeDetector" in window) {
-        const formats = await BarcodeDetector.getSupportedFormats();
-        const want = ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39", "itf"].filter(f => formats.includes(f));
-        if (want.length) {
-          const detector = new BarcodeDetector({ formats: want });
-          stream = await navigator.mediaDevices.getUserMedia(constraints);
-          video.srcObject = stream;
-          await video.play();
-          tuneCamera(stream);
-          const loop = async () => {
-            if (!scanning) return;
-            try {
-              const codes = await detector.detect(video);
-              if (codes.length) onDetected(codes[0].rawValue);
-            } catch (e) { }
-            setTimeout(loop, 120);
-          };
-          loop();
-          return;
-        }
-      }
-      const hints = new Map();
-      hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8, ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E, ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39, ZXing.BarcodeFormat.ITF]);
-      hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-      zxingReader = new ZXing.BrowserMultiFormatReader(hints, 150);
-      await zxingReader.decodeFromConstraints(constraints, video, (result) => {
-        if (result && scanning) onDetected(result.getText());
-      });
-      if (video.srcObject) tuneCamera(video.srcObject);
+      let s = await navigator.mediaDevices.getUserMedia(videoConstraints(null));
+      backCams = await listBackCams();
+      const current = s.getVideoTracks()[0].getSettings().deviceId;
+      const want = backCams.length ? pickMainCam(backCams) : -1;
+      if (want >= 0 && backCams[want].deviceId && backCams[want].deviceId !== current) {
+        s.getTracks().forEach(t => t.stop());
+        try { s = await navigator.mediaDevices.getUserMedia(videoConstraints(backCams[want].deviceId)); camIndex = want; }
+        catch (e) { s = await navigator.mediaDevices.getUserMedia(videoConstraints(null)); camIndex = backCams.findIndex(d => d.deviceId === current); }
+      } else camIndex = backCams.findIndex(d => d.deviceId === current);
+      if (!scanning) { s.getTracks().forEach(t => t.stop()); return; }
+      await runDecoder(s);
     } catch (e) {
       stopScan();
       flash("Kamera açılamadı: " + (e && e.message ? e.message : e), "err");
     }
   }
 
-  let camTrack = null, torchOn = false;
+  async function runDecoder(s) {
+    stream = s;
+    const video = $("video");
+    video.srcObject = s;
+    await video.play().catch(() => { });
+    tuneCamera(s);
+    if ("BarcodeDetector" in window) {
+      try {
+        const formats = await BarcodeDetector.getSupportedFormats();
+        const want = ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39", "itf"].filter(f => formats.includes(f));
+        if (want.length) {
+          const detector = new BarcodeDetector({ formats: want });
+          const loop = async () => {
+            if (!scanning || stream !== s) return;
+            try {
+              const codes = await detector.detect(video);
+              if (codes.length) onDetected(codes[0].rawValue);
+            } catch (e) { }
+            detectTimer = setTimeout(loop, 100);
+          };
+          loop();
+          return;
+        }
+      } catch (e) { }
+    }
+    const hints = new Map();
+    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8, ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E, ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39, ZXing.BarcodeFormat.ITF]);
+    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+    zxingReader = new ZXing.BrowserMultiFormatReader(hints, 120);
+    zxingReader.decodeFromStream(s, video, (result) => {
+      if (result && scanning) onDetected(result.getText());
+    });
+  }
 
   function tuneCamera(s) {
     camTrack = s && s.getVideoTracks ? s.getVideoTracks()[0] : null;
     const caps = camTrack && camTrack.getCapabilities ? camTrack.getCapabilities() : {};
-    const adv = {};
-    if (caps.focusMode && caps.focusMode.includes("continuous")) adv.focusMode = "continuous";
-    if (caps.zoom && caps.zoom.max >= 1.5) adv.zoom = Math.min(1.5, caps.zoom.max);
-    if (Object.keys(adv).length) camTrack.applyConstraints({ advanced: [adv] }).catch(() => { });
+    if (caps.focusMode && caps.focusMode.includes("continuous")) camTrack.applyConstraints({ advanced: [{ focusMode: "continuous" }] }).catch(() => { });
     $("torch").hidden = !caps.torch;
+    $("zoom").hidden = !(caps.zoom && caps.zoom.max >= 1.8);
+    $("switchCam").hidden = backCams.length < 2;
+    zoomOn = false; torchOn = false;
+    const st = camTrack && camTrack.getSettings ? camTrack.getSettings() : {};
+    const name = camIndex >= 0 && backCams[camIndex] ? "Kamera " + (camIndex + 1) + "/" + backCams.length : "";
+    $("camInfo").textContent = [st.width && st.height ? st.width + "×" + st.height : "", name].filter(Boolean).join(" · ");
   }
 
   function toggleTorch() {
@@ -296,12 +337,65 @@
     camTrack.applyConstraints({ advanced: [{ torch: torchOn }] }).catch(() => { torchOn = false; });
   }
 
-  function stopScan() {
-    scanning = false;
-    camTrack = null; torchOn = false;
-    $("scanner").hidden = true;
+  function toggleZoom() {
+    if (!camTrack) return;
+    const caps = camTrack.getCapabilities ? camTrack.getCapabilities() : {};
+    if (!caps.zoom) return;
+    zoomOn = !zoomOn;
+    camTrack.applyConstraints({ advanced: [{ zoom: zoomOn ? Math.min(2, caps.zoom.max) : Math.max(1, caps.zoom.min) }] }).catch(() => { });
+    $("zoom").textContent = zoomOn ? "🔍 Normal" : "🔍 Yakın";
+  }
+
+  function tapFocus(e) {
+    if (!camTrack || !camTrack.getCapabilities) return;
+    const caps = camTrack.getCapabilities();
+    if (!caps.focusMode) return;
+    const r = $("video").getBoundingClientRect();
+    const adv = {};
+    if (caps.focusMode.includes("single-shot")) adv.focusMode = "single-shot";
+    else if (caps.focusMode.includes("manual") === false && caps.focusMode.includes("continuous")) adv.focusMode = "continuous";
+    if ("pointsOfInterest" in caps || (camTrack.getSettings && "pointsOfInterest" in camTrack.getSettings())) {
+      adv.pointsOfInterest = [{ x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height }];
+    }
+    camTrack.applyConstraints({ advanced: [adv] }).catch(() => { });
+    clearTimeout(focusTimer);
+    focusTimer = setTimeout(() => {
+      if (camTrack && caps.focusMode.includes("continuous")) camTrack.applyConstraints({ advanced: [{ focusMode: "continuous" }] }).catch(() => { });
+    }, 1500);
+    const dot = $("focusDot");
+    dot.style.left = (e.clientX - r.left) + "px";
+    dot.style.top = (e.clientY - r.top) + "px";
+    dot.hidden = false;
+    setTimeout(() => { dot.hidden = true; }, 700);
+  }
+
+  async function switchCamera() {
+    if (backCams.length < 2) return;
+    const next = (camIndex + 1) % backCams.length;
+    stopDecoder();
+    try {
+      const s = await navigator.mediaDevices.getUserMedia(videoConstraints(backCams[next].deviceId));
+      camIndex = next;
+      store.set("camId", backCams[next].deviceId);
+      await runDecoder(s);
+    } catch (e) {
+      flash("Bu kamera açılamadı, sıradakini dene.", "warn");
+      camIndex = next;
+    }
+  }
+
+  function stopDecoder() {
+    clearTimeout(detectTimer);
     if (zxingReader) { try { zxingReader.reset(); } catch (e) { } zxingReader = null; }
     if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+    camTrack = null;
+  }
+
+  function stopScan() {
+    scanning = false;
+    stopDecoder();
+    torchOn = false; zoomOn = false;
+    $("scanner").hidden = true;
     $("video").srcObject = null;
   }
 
@@ -535,6 +629,9 @@
     $("startScan").onclick = startScan;
     $("stopScan").onclick = stopScan;
     $("torch").onclick = toggleTorch;
+    $("zoom").onclick = toggleZoom;
+    $("switchCam").onclick = switchCamera;
+    $("video").addEventListener("click", tapFocus);
     $("manualForm").onsubmit = e => {
       e.preventDefault();
       const v = $("manualInput").value.trim();
