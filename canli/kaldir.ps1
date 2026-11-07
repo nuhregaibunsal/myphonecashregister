@@ -11,6 +11,7 @@ if (Get-ScheduledTask -TaskName "FiyatGor" -ErrorAction SilentlyContinue) {
 }
 Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" | Where-Object { $_.CommandLine -like "*FiyatGor\sunucu.ps1*" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 & netsh http delete sslcert ipport=0.0.0.0:$Port 2>&1 | Out-Null
+& netsh http delete sslcert ipport=[::]:$Port 2>&1 | Out-Null
 & netsh http delete urlacl url=https://+:$Port/ 2>&1 | Out-Null
 Get-NetFirewallRule -DisplayName "FiyatGor" -ErrorAction SilentlyContinue | Remove-NetFirewallRule
 Get-ChildItem Cert:\LocalMachine\My | Where-Object { $_.FriendlyName -eq "FiyatGor" } | Remove-Item

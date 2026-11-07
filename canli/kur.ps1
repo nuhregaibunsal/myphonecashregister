@@ -92,6 +92,8 @@ try {
     & netsh http delete sslcert ipport=0.0.0.0:$Port 2>&1 | Out-Null
     $out = & netsh http add sslcert ipport=0.0.0.0:$Port certhash=$($cert.Thumbprint) appid="{3f6a2b1c-8d4e-4f5a-9b7c-2e1d0a9f8c7b}" 2>&1
     if ($LASTEXITCODE -ne 0) { throw "Sertifika baglanamadi: $out" }
+    & netsh http delete sslcert ipport=[::]:$Port 2>&1 | Out-Null
+    & netsh http add sslcert ipport=[::]:$Port certhash=$($cert.Thumbprint) appid="{3f6a2b1c-8d4e-4f5a-9b7c-2e1d0a9f8c7b}" 2>&1 | Out-Null
     & netsh http delete urlacl url=https://+:$Port/ 2>&1 | Out-Null
     $out = & netsh http add urlacl url=https://+:$Port/ sddl="D:(A;;GX;;;WD)" 2>&1
     if ($LASTEXITCODE -ne 0) { throw "Adres izni verilemedi: $out" }
@@ -119,12 +121,20 @@ try {
     Step "Sunucu kontrol ediliyor"
     [Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
     $durum = $null
-    for ($i = 0; $i -lt 40 -and -not $durum; $i++) {
+    $lastErr = ""
+    for ($i = 0; $i -lt 30 -and -not $durum; $i++) {
         Start-Sleep -Seconds 2
-        try { $durum = (Invoke-WebRequest -UseBasicParsing -Uri "https://localhost:$Port/api/durum" -TimeoutSec 10).Content | ConvertFrom-Json } catch { }
+        try { $durum = (Invoke-WebRequest -UseBasicParsing -Uri "https://127.0.0.1:$Port/api/durum" -TimeoutSec 10).Content | ConvertFrom-Json } catch { $lastErr = $_.Exception.Message }
     }
     if (-not $durum) {
-        Fail "Sunucu cevap vermedi. Kayit dosyasi: $dir\sunucu.log"
+        Fail "Sunucu cevap vermedi."
+        Fail "Son hata: $lastErr"
+        $proc = Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" | Where-Object { $_.CommandLine -like "*FiyatGor\sunucu.ps1*" }
+        if ($proc) { Warn "Sunucu programi calisiyor gorunuyor." } else { Fail "Sunucu programi calismiyor." }
+        if (Test-Path "$dir\sunucu.log") {
+            Warn "Kayit dosyasinin son satirlari:"
+            Get-Content "$dir\sunucu.log" -Tail 12 | ForEach-Object { Write-Host "     $_" }
+        } else { Fail "Kayit dosyasi hic olusmamis, sunucu hic baslamamis." }
     } elseif ($durum.sql) {
         Ok "Sunucu calisiyor ve fiyatlari okuyabiliyor"
     } else {
