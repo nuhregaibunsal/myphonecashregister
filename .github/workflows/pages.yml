@@ -2,7 +2,7 @@ name: Yayinla
 
 on:
   push:
-    branches: [main]
+    branches: [main, ccr-b84fb9e5-jhjwlf]
   workflow_dispatch:
 
 permissions:
