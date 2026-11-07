@@ -84,3 +84,11 @@ Kurulum sırasında 4-8 haneli bir PIN belirlenirse, canlı bağlantıda okutula
 - Fiyat bu arada başka yerden değiştiyse üzerine yazılmaz.
 - Her değişiklik `C:\FiyatGor\fiyat-degisiklikleri.csv` dosyasına kaydedilir.
 - PIN'i değiştirmek ya da kapatmak için kurulum komutu tekrar çalıştırılır.
+
+### Terazi programı (CL Works) keşfi
+
+Normal PowerShell'de (yönetici gerekmez) şunu çalıştırın. CL Works veritabanını bulur, tablolarını listeler, hiçbir şeyi değiştirmez ve sonucu panoya kopyalar:
+
+```powershell
+[Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/nuhregaibunsal/myphonecashregister/HEAD/canli/cl-kesif.ps1 | iex
+```
