@@ -57,6 +57,33 @@ try {
         Warn "Hata: $($_.Exception.Message)"
     }
 
+    Step "Telefondan fiyat degistirme PIN kodu"
+    $pinPath = "$dir\pin.txt"
+    $ask = $true
+    if (Test-Path $pinPath) {
+        $ans = Read-Host "   PIN zaten var. Degistirmek icin E, ayni kalsin diye Enter"
+        $ask = $ans -match '^[eE]'
+    }
+    if ($ask) {
+        Write-Host "   4-8 haneli bir PIN yazin. Bos birakirsaniz telefondan fiyat degistirme kapali olur."
+        $p1 = Read-Host "   PIN"
+        if ($p1) {
+            $p2 = Read-Host "   PIN tekrar"
+            if ($p1 -ne $p2) { Warn "PIN'ler ayni degil, fiyat degistirme kapali birakildi. Kurulumu tekrar calistirarak ayarlayabilirsiniz." }
+            elseif ($p1 -notmatch '^\d{4,8}$') { Warn "PIN 4-8 rakam olmali, fiyat degistirme kapali birakildi." }
+            else {
+                $salt = [guid]::NewGuid().ToString("N")
+                $sha = [System.Security.Cryptography.SHA256]::Create()
+                $hash = ([System.BitConverter]::ToString($sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($salt + ":" + $p1)))).Replace("-", "")
+                [System.IO.File]::WriteAllText($pinPath, "$($salt):$hash")
+                Ok "PIN kaydedildi"
+            }
+        } elseif (Test-Path $pinPath) {
+            Remove-Item $pinPath -Force
+            Ok "Telefondan fiyat degistirme kapatildi"
+        }
+    }
+
     Step "Guvenli baglanti sertifikasi hazirlaniyor"
     $cert = Get-ChildItem Cert:\LocalMachine\My | Where-Object { $_.FriendlyName -eq "FiyatGor" -and $_.NotAfter -gt (Get-Date).AddDays(30) } | Select-Object -First 1
     if (-not $cert) {

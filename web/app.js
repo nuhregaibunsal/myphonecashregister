@@ -88,7 +88,8 @@
         ad: String(p.ad || "").trim(),
         fiyat: round2(p.fiyat),
         birim: String(p.birim || "").trim().toUpperCase(),
-        plu: Scale.normCode(p.plu)
+        plu: Scale.normCode(p.plu),
+        birimind: Number(p.birimind) || 0
       })).filter(p => p.ad);
       meta = { updated: data.updated || Date.now(), source: "Kasa bilgisayarı, canlı" };
       live = true;
@@ -102,8 +103,71 @@
     }
   }
 
+  let canEditPrice = false, pinCache = "", pinAt = 0;
+
+  async function loadRights() {
+    try {
+      const res = await fetch("api/yetki", { cache: "no-store" });
+      const j = await res.json();
+      canEditPrice = !!(j && j.fiyat);
+    } catch (e) { canEditPrice = false; }
+  }
+
+  function findProduct(birimind) { return products.find(p => p.birimind === birimind) || null; }
+
+  function openPriceEdit(p) {
+    const dlg = $("editDialog");
+    busy = true;
+    $("eTitle").textContent = p.ad;
+    $("eOld").textContent = "Şu anki fiyat: " + tl(p.fiyat) + (p.birim ? " / " + lower(p.birim) : "");
+    $("eNew").value = "";
+    $("ePin").value = pinCache && Date.now() - pinAt < 10 * 60000 ? pinCache : "";
+    $("eMsg").textContent = "";
+    $("eSave").disabled = false;
+    const close = () => dlg.close();
+    dlg.onclose = () => { busy = false; };
+    $("eCancel").onclick = close;
+    $("eSave").onclick = async () => {
+      const yeni = parseFloat(String($("eNew").value).replace(/\./g, "").replace(",", "."));
+      const pin = String($("ePin").value).trim();
+      if (!(yeni > 0)) { $("eMsg").textContent = "Yeni fiyatı yaz."; return; }
+      if (!/^\d{4,8}$/.test(pin)) { $("eMsg").textContent = "PIN 4-8 rakam olmalı."; return; }
+      $("eSave").disabled = true;
+      $("eMsg").textContent = "Kaydediliyor…";
+      try {
+        const res = await fetch("api/fiyat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ birimind: p.birimind, eski: p.fiyat, yeni, pin, ad: p.ad })
+        });
+        const j = await res.json().catch(() => ({}));
+        if (res.ok && j.ok) {
+          pinCache = pin; pinAt = Date.now();
+          const eski = p.fiyat;
+          p.fiyat = round2(yeni);
+          close();
+          flash(p.ad + ": " + tl(eski) + " → " + tl(p.fiyat) + " olarak kasaya kaydedildi", "ok");
+          await saveProducts();
+          syncLive();
+          if ($("tab-urunler").classList.contains("active")) renderList();
+          return;
+        }
+        if (res.status === 401) { pinCache = ""; $("ePin").value = ""; }
+        if (res.status === 409) syncLive();
+        $("eMsg").textContent = j.error || ("Kaydedilemedi (" + res.status + ")");
+      } catch (e) {
+        $("eMsg").textContent = "Kasa bilgisayarına ulaşılamadı.";
+      }
+      $("eSave").disabled = false;
+    };
+    dlg.showModal();
+    setTimeout(() => $("eNew").focus(), 50);
+  }
+
   async function startLive() {
     if (await syncLive()) {
+      await loadRights();
+      renderInfo();
       liveTimer = setInterval(syncLive, 60000);
       document.addEventListener("visibilitychange", () => { if (!document.hidden) syncLive(); });
     }
@@ -160,7 +224,7 @@
     const existing = basket.find(i => i.kod === code && i.birim !== "KG" && !i.sabit && i.fiyat === p.fiyat);
     if (existing) { existing.miktar += 1; existing.tutar = existing.miktar * existing.fiyat; saveBasket(); flashItem(existing); return; }
     const birim = isKg(p) ? "ADET" : (p.birim || "ADET");
-    pushItem({ ad: p.ad, fiyat: p.fiyat, birim, miktar: 1, tutar: p.fiyat, kod: code });
+    pushItem({ ad: p.ad, fiyat: p.fiyat, birim, miktar: 1, tutar: p.fiyat, kod: code, birimind: p.birimind || 0 });
   }
 
   function addProduct(p) {
@@ -249,6 +313,13 @@
     $("lastScan").children[0].textContent = item.ad;
     $("lastScan").children[1].textContent = qty + " × " + tl(item.fiyat) + (item.birim === "KG" ? "/kg" : "") + (item.okundu ? " · etiketten okundu, kontrol et" : "");
     $("lastScan").children[2].textContent = tl(item.tutar);
+    const prod = canEditPrice && item.birimind && !item.agirlikli ? findProduct(item.birimind) : null;
+    if (prod) {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "btn sm editprice"; b.textContent = "₺ Fiyatı değiştir";
+      b.onclick = () => openPriceEdit(prod);
+      $("lastScan").appendChild(b);
+    }
   }
 
   function flash(text, kind) {
@@ -556,6 +627,8 @@
     return out;
   }
 
+  const noop = () => { };
+
   function productLi(p, onClick) {
     const li = document.createElement("li");
     li.innerHTML = '<div class="info"><b></b><span class="muted small"></span></div><strong></strong>';
@@ -563,6 +636,13 @@
     li.querySelector("span").textContent = [p.barkod, p.plu ? "PLU " + p.plu : ""].filter(Boolean).join(" · ");
     li.querySelector("strong").textContent = tl(p.fiyat);
     li.onclick = () => onClick(p);
+    if (canEditPrice && p.birimind && onClick !== noop) {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "btn sm"; b.textContent = "₺✎";
+      b.title = "Fiyatı değiştir";
+      b.onclick = e => { e.stopPropagation(); openPriceEdit(p); };
+      li.appendChild(b);
+    }
     return li;
   }
 
@@ -718,7 +798,7 @@
     $("preview").innerHTML = "";
     const ul = document.createElement("ul");
     ul.className = "list";
-    list.forEach(p => ul.appendChild(productLi(p, () => { })));
+    list.forEach(p => ul.appendChild(productLi(p, noop)));
     $("preview").appendChild(ul);
   }
 

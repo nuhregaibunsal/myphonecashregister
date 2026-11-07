@@ -9,4 +9,5 @@ DECLARE @u sysname = (SELECT name FROM sys.database_principals WHERE sid = SUSER
 EXEC (N'GRANT SELECT ON dbo.F0101TBLSTOKLAR TO ' + N'[' + @u + N']');
 EXEC (N'GRANT SELECT ON dbo.F0101TBLBIRIMLEREX TO ' + N'[' + @u + N']');
 EXEC (N'GRANT SELECT ON dbo.TBLFASTERSTOKLAR TO ' + N'[' + @u + N']');
-SELECT N'Tamam: ' + @u + N' sadece okuma izni aldi' AS Sonuc;
+EXEC (N'GRANT UPDATE (SATISFIYATI1, ESKIFIYAT1, FIYATDEGISMETARIHI1) ON dbo.F0101TBLBIRIMLEREX TO ' + N'[' + @u + N']');
+SELECT N'Tamam: ' + @u + N' 3 tabloyu okuyabilir, sadece satis fiyati sutunlarini degistirebilir' AS Sonuc;

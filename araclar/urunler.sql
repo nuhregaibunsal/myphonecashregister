@@ -6,7 +6,8 @@ SELECT
   REPLACE(REPLACE(REPLACE(x.ad, ',', ' '), ';', ' '), '"', '') AS ad,
   x.fiyat,
   x.birim,
-  x.plu
+  x.plu,
+  x.birimind
 FROM (
   SELECT
     LTRIM(RTRIM(ISNULL(b.BARCODE, ''))) AS kod,
@@ -24,6 +25,7 @@ FROM (
         AND fs.PLU IS NOT NULL
         AND CAST(fs.PLU AS varchar(20)) NOT IN ('', '0')
     ), '') AS plu,
+    b.IND AS birimind,
     s.DELETED,
     s.IPTAL
   FROM dbo.F0101TBLBIRIMLEREX b

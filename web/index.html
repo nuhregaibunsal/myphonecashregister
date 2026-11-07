@@ -133,6 +133,22 @@
   <button data-tab="ayarlar" type="button">⚙️<span>Ayarlar</span></button>
 </nav>
 
+<dialog id="editDialog">
+  <div>
+    <h3 id="eTitle"></h3>
+    <p class="muted" id="eOld"></p>
+    <div class="grid">
+      <label>Yeni fiyat<input id="eNew" inputmode="decimal" autocomplete="off"></label>
+      <label>PIN<input id="ePin" type="password" inputmode="numeric" autocomplete="off"></label>
+    </div>
+    <p class="msg" id="eMsg"></p>
+    <div class="row">
+      <button class="btn" id="eCancel" type="button">Vazgeç</button>
+      <button class="btn primary" id="eSave" type="button">Kasaya kaydet</button>
+    </div>
+  </div>
+</dialog>
+
 <dialog id="priceDialog">
   <form method="dialog">
     <h3 id="pTitle"></h3>

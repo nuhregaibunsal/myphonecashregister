@@ -140,3 +140,4 @@ dialog input { font-size: 24px; text-align: center; margin: 8px 0; }
 .quick { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
 .quick .btn { flex: 1; }
 @media (max-width: 380px) { .grid { grid-template-columns: 1fr; } }
+.last .editprice { grid-column: 1 / -1; justify-self: start; margin-top: 6px; }

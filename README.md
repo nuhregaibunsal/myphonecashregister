@@ -65,7 +65,7 @@ Fiyatlar değiştiğinde betiği tekrar çalıştırıp dosyayı yeniden yükley
 
 Telefon, dükkanın Wi-Fi ağındayken fiyatları doğrudan kasa veritabanından okur. CSV gerekmez; kasada değişen fiyat bir dakika içinde telefona gelir.
 
-1. SSMS'te `canli/izin.sql` sorgusunu çalıştırın. Windows hesabına sadece üç tabloyu okuma izni verir, şifre kullanmaz.
+1. SSMS'te `canli/izin.sql` sorgusunu çalıştırın. Windows hesabına üç tabloyu okuma ve sadece satış fiyatı sütunlarını değiştirme izni verir, şifre kullanmaz.
 2. Başlat'a sağ tıklayıp **Windows PowerShell (Yönetici)** açın ve şunu yapıştırın:
 
 ```powershell
@@ -75,3 +75,12 @@ Telefon, dükkanın Wi-Fi ağındayken fiyatları doğrudan kasa veritabanından
 3. Açılan sayfadaki karekodu telefonla okutun. "Bağlantınız gizli değil" uyarısında **Gelişmiş**, sonra **Devam et**.
 
 Kurulum `C:\FiyatGor` klasörüne yapılır. Sunucu Windows oturumu açılınca kendiliğinden başlar ve her açılışta uygulamanın son sürümünü indirir. Kayıtlar `C:\FiyatGor\sunucu.log` dosyasındadır. Kaldırmak için yönetici PowerShell'de `C:\FiyatGor\kaldir.ps1` çalıştırılır.
+
+### Telefondan fiyat değiştirme
+
+Kurulum sırasında 4-8 haneli bir PIN belirlenirse, canlı bağlantıda okutulan ürünün altında ve Ürünler listesinde fiyat değiştirme düğmesi çıkar. Yeni fiyat Vega'nın yaptığı gibi yazılır: `F0101TBLBIRIMLEREX` tablosunda eski fiyat `ESKIFIYAT1` sütununa alınır, yeni fiyat `SATISFIYATI1` sütununa yazılır, değişiklik zamanı `FIYATDEGISMETARIHI1` sütununa işlenir.
+
+- 5 yanlış PIN denemesinden sonra 5 dakika kilitlenir.
+- Fiyat bu arada başka yerden değiştiyse üzerine yazılmaz.
+- Her değişiklik `C:\FiyatGor\fiyat-degisiklikleri.csv` dosyasına kaydedilir.
+- PIN'i değiştirmek ya da kapatmak için kurulum komutu tekrar çalıştırılır.

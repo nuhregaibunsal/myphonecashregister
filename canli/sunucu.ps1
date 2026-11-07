@@ -63,6 +63,7 @@ function Get-ProductsJson {
             $d["fiyat"] = if ($r["fiyat"] -is [DBNull]) { 0 } else { [double]$r["fiyat"] }
             $d["birim"] = [string]$r["birim"]
             $d["plu"] = [string]$r["plu"]
+            $d["birimind"] = if ($r["birimind"] -is [DBNull]) { 0 } else { [int]$r["birimind"] }
             $list.Add($d)
         }
         $r.Close()
@@ -77,6 +78,77 @@ function Get-ProductsJson {
     $script:cacheAt = Get-Date
     $script:lastError = ""
     return ,$script:cache
+}
+
+$pinFile = Join-Path $root "pin.txt"
+$changeLog = Join-Path $root "fiyat-degisiklikleri.csv"
+$script:pinFails = 0
+$script:lockUntil = [datetime]::MinValue
+
+function Hash-Pin([string]$salt, [string]$pin) {
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    $bytes = $sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($salt + ":" + $pin))
+    return ([System.BitConverter]::ToString($bytes)).Replace("-", "")
+}
+
+function Test-Pin([string]$pin) {
+    if (-not (Test-Path $pinFile)) { return "kapali" }
+    if ((Get-Date) -lt $script:lockUntil) { return "kilitli" }
+    $parts = ([System.IO.File]::ReadAllText($pinFile)).Trim().Split(":")
+    if ($parts.Length -eq 2 -and (Hash-Pin $parts[0] $pin) -eq $parts[1]) {
+        $script:pinFails = 0
+        return "ok"
+    }
+    $script:pinFails++
+    if ($script:pinFails -ge 5) {
+        $script:lockUntil = (Get-Date).AddMinutes(5)
+        $script:pinFails = 0
+        Log "PIN 5 kez yanlis girildi, 5 dakika kilitlendi"
+        return "kilitli"
+    }
+    return "yanlis"
+}
+
+function Read-JsonBody($ctx) {
+    if ($ctx.Request.ContentLength64 -gt 10000) { throw "istek cok buyuk" }
+    $reader = New-Object System.IO.StreamReader($ctx.Request.InputStream, [System.Text.Encoding]::UTF8)
+    $text = $reader.ReadToEnd()
+    $reader.Close()
+    return $ser.DeserializeObject($text)
+}
+
+function Set-Price($ctx) {
+    $b = Read-JsonBody $ctx
+    $pinState = Test-Pin ([string]$b["pin"])
+    if ($pinState -eq "kapali") { SendJson $ctx 403 @{ ok = $false; error = "Fiyat degistirme kapali. Kurulumda PIN belirlenmedi." }; return }
+    if ($pinState -eq "kilitli") { SendJson $ctx 423 @{ ok = $false; error = "Cok fazla yanlis PIN. 5 dakika bekleyin." }; return }
+    if ($pinState -ne "ok") { SendJson $ctx 401 @{ ok = $false; error = "PIN yanlis." }; return }
+    $ind = [int]$b["birimind"]
+    $eski = [decimal]$b["eski"]
+    $yeni = [decimal]$b["yeni"]
+    if ($ind -le 0 -or $yeni -le 0 -or $yeni -ge 1000000) { SendJson $ctx 400 @{ ok = $false; error = "Gecersiz fiyat." }; return }
+    $conn = New-Object System.Data.SqlClient.SqlConnection($connStr)
+    try {
+        $conn.Open()
+        $cmd = $conn.CreateCommand()
+        $cmd.CommandText = "UPDATE dbo.F0101TBLBIRIMLEREX SET ESKIFIYAT1 = SATISFIYATI1, SATISFIYATI1 = @yeni, FIYATDEGISMETARIHI1 = GETDATE() WHERE IND = @ind AND (ABS(ISNULL(SATISFIYATI1, 0) - @eski) < 0.005 OR (ISNULL(SATISFIYATI1, 0) = 0 AND ABS(ISNULL(SATISFIYATI, 0) - @eski) < 0.005))"
+        [void]$cmd.Parameters.AddWithValue("@yeni", $yeni)
+        [void]$cmd.Parameters.AddWithValue("@eski", $eski)
+        [void]$cmd.Parameters.AddWithValue("@ind", $ind)
+        $n = $cmd.ExecuteNonQuery()
+    } finally {
+        $conn.Close()
+    }
+    $script:cache = $null
+    if ($n -ne 1) {
+        SendJson $ctx 409 @{ ok = $false; error = "Bu urunun fiyati bu arada degismis. Liste yenilendi, tekrar deneyin." }
+        return
+    }
+    $ip = [string]$ctx.Request.RemoteEndPoint.Address
+    $line = "{0:yyyy-MM-dd HH:mm:ss};{1};{2};{3};{4};{5}" -f (Get-Date), $ind, ([string]$b["ad"]).Replace(";", " "), $eski, $yeni, $ip
+    Add-Content -Path $changeLog -Value $line -Encoding UTF8
+    Log "Fiyat degisti: birim $ind, $eski -> $yeni ($ip)"
+    SendJson $ctx 200 @{ ok = $true; eski = $eski; yeni = $yeni }
 }
 
 $types = @{
@@ -109,6 +181,18 @@ function Handle($ctx) {
             $script:lastError = $_.Exception.Message
             Log "SQL hatasi: $($script:lastError)"
             SendJson $ctx 503 @{ ok = $false; error = $script:lastError }
+        }
+        return
+    }
+    if ($path -eq "/api/yetki") {
+        SendJson $ctx 200 @{ ok = $true; fiyat = (Test-Path $pinFile) }
+        return
+    }
+    if ($path -eq "/api/fiyat") {
+        if ($ctx.Request.HttpMethod -ne "POST") { SendJson $ctx 405 @{ ok = $false; error = "POST gerekli" }; return }
+        try { Set-Price $ctx } catch {
+            Log "Fiyat degistirilemedi: $($_.Exception.Message)"
+            SendJson $ctx 500 @{ ok = $false; error = "Fiyat degistirilemedi: $($_.Exception.Message)" }
         }
         return
     }
