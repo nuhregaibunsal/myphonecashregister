@@ -124,7 +124,17 @@ try {
     $lastErr = ""
     for ($i = 0; $i -lt 30 -and -not $durum; $i++) {
         Start-Sleep -Seconds 2
-        try { $durum = (Invoke-WebRequest -UseBasicParsing -Uri "https://127.0.0.1:$Port/api/durum" -TimeoutSec 10).Content | ConvertFrom-Json } catch { $lastErr = $_.Exception.Message }
+        $curl = Join-Path $env:SystemRoot "System32\curl.exe"
+        if (Test-Path $curl) {
+            $out = & $curl -k -s --max-time 10 "https://127.0.0.1:$Port/api/durum" 2>&1
+            if ($LASTEXITCODE -eq 0 -and $out) {
+                try { $durum = ($out | Out-String) | ConvertFrom-Json } catch { $lastErr = "Cevap okunamadi: $out" }
+            } elseif ($LASTEXITCODE -eq 35) { $lastErr = "Guvenli baglanti (sertifika) kurulamadi, curl kodu 35" }
+            elseif ($LASTEXITCODE -eq 7) { $lastErr = "Porta baglanilamadi, curl kodu 7" }
+            else { $lastErr = "curl kodu $LASTEXITCODE" }
+        } else {
+            try { $durum = (Invoke-WebRequest -UseBasicParsing -Uri "https://127.0.0.1:$Port/api/durum" -TimeoutSec 10).Content | ConvertFrom-Json } catch { $lastErr = $_.Exception.Message }
+        }
     }
     if (-not $durum) {
         Fail "Sunucu cevap vermedi."
