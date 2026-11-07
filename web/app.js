@@ -64,6 +64,7 @@
 
   async function saveProducts() {
     await idbSet("products", { products, meta });
+    try { if (navigator.storage && navigator.storage.persist) await navigator.storage.persist(); } catch (e) { }
     index();
     renderInfo();
   }
