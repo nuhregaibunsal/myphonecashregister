@@ -44,6 +44,9 @@
   let byBarcode = new Map();
   let meta = { updated: null, source: "" };
   let settings = Object.assign({}, Scale.DEFAULTS, store.get("scaleSettings", {}));
+  if (settings.unknownScale === "price") settings.unknownScale = "ocr";
+  const round2 = n => Math.round((Number(n) || 0) * 100) / 100;
+  let busy = false;
   let basket = store.get("basket", []);
 
   function index() {
@@ -91,13 +94,11 @@
     return { notFound: true };
   }
 
-  function addFromCode(code, viaCamera) {
+  function addFromCode(code, snap) {
     if (!products.length) { flash("Önce Ayarlar'dan ürün listesini yükle.", "warn"); return; }
     const r = lookup(code);
-    if (r && r.notFound && r.scale && settings.unknownScale === "price") {
-      beep(true);
-      const amount = r.scale.raw / 100;
-      pushItem({ ad: settings.unknownName || "Ağırlıklı işlem", fiyat: amount, birim: "ADET", miktar: 1, tutar: amount, kod: code, sabit: true });
+    if (r && r.notFound && r.scale && settings.unknownScale !== "none") {
+      handleWeighed(r.scale, code, snap);
       return;
     }
     if (!r || r.notFound) {
@@ -137,13 +138,79 @@
     flashItem(item);
   }
 
+  function weighedName() { return settings.unknownName || "Ağırlıklı işlem"; }
+
+  function handleWeighed(scale, code, snap) {
+    if (scale.valType === "price") {
+      beep(true);
+      pushItem({ ad: weighedName(), fiyat: scale.amount, birim: "ADET", miktar: 1, tutar: scale.amount, kod: code, sabit: true });
+      return;
+    }
+    const kg = scale.kg;
+    if (settings.unknownScale === "ocr" && snap && window.LabelOCR) {
+      busy = true;
+      beep(true);
+      flash("Etiket okunuyor… " + kgFmt(kg) + " kg", "warn");
+      LabelOCR.readLabel(snap.canvas, kg, 9000, snap.corners).then(res => {
+        if (res.match) pushWeighed(kg, res.match.unit, res.match.total, code, true);
+        else { beep(false); askUnitPrice(kg, code, res.nums, null); }
+      }).catch(() => askUnitPrice(kg, code, [], null)).finally(() => { busy = false; });
+      return;
+    }
+    beep(true);
+    askUnitPrice(kg, code, [], null);
+  }
+
+  function rememberUnit(u) {
+    const list = store.get("recentUnits", []).filter(x => x !== u);
+    list.unshift(u);
+    store.set("recentUnits", list.slice(0, 4));
+  }
+
+  function pushWeighed(kg, unit, total, code, fromOcr) {
+    rememberUnit(unit);
+    pushItem({ ad: weighedName(), fiyat: unit, birim: "KG", miktar: kg, tutar: total != null ? total : round2(unit * kg), kod: code, agirlikli: true, okundu: !!fromOcr });
+  }
+
+  function askUnitPrice(kg, code, nums, item) {
+    busy = true;
+    const dlg = $("priceDialog");
+    $("pTitle").textContent = weighedName() + " · " + kgFmt(kg) + " kg";
+    const unitIn = $("pUnit"), totalIn = $("pTotal");
+    unitIn.value = item ? String(item.fiyat).replace(".", ",") : "";
+    totalIn.value = item ? String(item.tutar).replace(".", ",") : "";
+    const num = v => parseFloat(String(v).replace(/\./g, "").replace(",", ".")) || 0;
+    unitIn.oninput = () => { const u = num(unitIn.value); totalIn.value = u > 0 ? String(round2(u * kg)).replace(".", ",") : ""; };
+    totalIn.oninput = () => { const t = num(totalIn.value); unitIn.value = t > 0 ? String(round2(t / kg)).replace(".", ",") : ""; };
+    const quick = $("pQuick");
+    quick.innerHTML = "";
+    const addBtn = (label, fn) => { const b = document.createElement("button"); b.type = "button"; b.className = "btn sm"; b.textContent = label; b.onclick = fn; quick.appendChild(b); };
+    store.get("recentUnits", []).forEach(u => addBtn(tl(u) + "/kg", () => { unitIn.value = String(u).replace(".", ","); unitIn.oninput(); }));
+    const seen = new Set();
+    (nums || []).filter(n => n.decimals === 2 && n.value > 0 && !seen.has(n.value) && seen.add(n.value)).slice(0, 3)
+      .forEach(n => addBtn("Tutar " + tl(n.value), () => { totalIn.value = String(n.value).replace(".", ","); totalIn.oninput(); }));
+    dlg.onclose = () => {
+      busy = false;
+      if (dlg.returnValue !== "ok") { if (!item) $("lastScan").hidden = true; return; }
+      let u = num(unitIn.value), t = num(totalIn.value);
+      if (!(u > 0) && t > 0) u = round2(t / kg);
+      if (!(t > 0) && u > 0) t = round2(u * kg);
+      if (!(u > 0)) return;
+      if (item) { item.fiyat = u; item.tutar = t; item.okundu = false; rememberUnit(u); saveBasket(); flashItem(item); }
+      else pushWeighed(kg, u, t, code, false);
+    };
+    dlg.returnValue = "";
+    dlg.showModal();
+    setTimeout(() => unitIn.focus(), 50);
+  }
+
   function flashItem(item) {
     const qty = item.birim === "KG" ? kgFmt(item.miktar) + " kg" : item.miktar + " " + lower(item.birim || "adet");
     $("lastScan").hidden = false;
     $("lastScan").className = "last ok";
     $("lastScan").innerHTML = "<b></b><span></span><strong></strong>";
     $("lastScan").children[0].textContent = item.ad;
-    $("lastScan").children[1].textContent = qty + " × " + tl(item.fiyat) + (item.birim === "KG" ? "/kg" : "");
+    $("lastScan").children[1].textContent = qty + " × " + tl(item.fiyat) + (item.birim === "KG" ? "/kg" : "") + (item.okundu ? " · etiketten okundu, kontrol et" : "");
     $("lastScan").children[2].textContent = tl(item.tutar);
   }
 
@@ -165,13 +232,13 @@
       const qty = item.birim === "KG" ? kgFmt(item.miktar) + " kg" : item.miktar + " " + lower(item.birim || "adet");
       li.innerHTML = '<div class="info"><b></b><span class="muted small"></span></div><strong></strong><div class="acts"></div>';
       li.querySelector("b").textContent = item.ad;
-      li.querySelector("span").textContent = qty + " × " + tl(item.fiyat);
+      li.querySelector("span").textContent = qty + " × " + tl(item.fiyat) + (item.okundu ? " · etiketten" : "");
       li.querySelector("strong").textContent = tl(item.tutar);
       const acts = li.querySelector(".acts");
       if (!item.sabit) {
         const edit = document.createElement("button");
         edit.className = "btn sm"; edit.type = "button"; edit.textContent = "✎";
-        edit.onclick = () => askQty(item, q => { item.miktar = q; item.tutar = q * item.fiyat; saveBasket(); });
+        edit.onclick = () => item.agirlikli ? askUnitPrice(item.miktar, item.kod, [], item) : askQty(item, q => { item.miktar = q; item.tutar = q * item.fiyat; saveBasket(); });
         acts.appendChild(edit);
       }
       const del = document.createElement("button");
@@ -225,12 +292,36 @@
   let stream = null, scanning = false, zxingReader = null, lastCode = "", lastTime = 0;
   let camTrack = null, torchOn = false, zoomOn = false, backCams = [], camIndex = -1, detectTimer = null, focusTimer = null;
 
-  function onDetected(code) {
+  function snapshot(corners) {
+    const v = $("video");
+    if (!v.videoWidth) return null;
+    const c = document.createElement("canvas");
+    c.width = v.videoWidth;
+    c.height = v.videoHeight;
+    c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
+    return { canvas: c, corners };
+  }
+
+  function cornersFromLine(pts) {
+    if (!pts || pts.length < 2) return null;
+    const a = pts[0], b = pts[pts.length - 1];
+    const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy);
+    if (len < 10) return null;
+    const nx = -dy / len, ny = dx / len, h = len * 0.16;
+    return [
+      { x: a.x - nx * h, y: a.y - ny * h }, { x: b.x - nx * h, y: b.y - ny * h },
+      { x: b.x + nx * h, y: b.y + ny * h }, { x: a.x + nx * h, y: a.y + ny * h }
+    ];
+  }
+
+  function onDetected(code, corners) {
+    if (busy || $("priceDialog").open || $("qtyDialog").open) return;
     const now = Date.now();
     if (code === lastCode && now - lastTime < 2500) return;
     if (now - lastTime < 900) return;
     lastCode = code; lastTime = now;
-    addFromCode(code, true);
+    const snap = Scale.parseScale(code, settings) ? snapshot(corners) : null;
+    addFromCode(code, snap);
   }
 
   function videoConstraints(deviceId) {
@@ -290,6 +381,7 @@
     video.srcObject = s;
     await video.play().catch(() => { });
     tuneCamera(s);
+    if (settings.unknownScale === "ocr" && window.LabelOCR) setTimeout(() => LabelOCR.warm().catch(() => { }), 1500);
     if ("BarcodeDetector" in window) {
       try {
         const formats = await BarcodeDetector.getSupportedFormats();
@@ -300,7 +392,7 @@
             if (!scanning || stream !== s) return;
             try {
               const codes = await detector.detect(video);
-              if (codes.length) onDetected(codes[0].rawValue);
+              if (codes.length) onDetected(codes[0].rawValue, codes[0].cornerPoints && codes[0].cornerPoints.length === 4 ? codes[0].cornerPoints.map(p => ({ x: p.x, y: p.y })) : null);
             } catch (e) { }
             detectTimer = setTimeout(loop, 100);
           };
@@ -312,10 +404,26 @@
     const hints = new Map();
     hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8, ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E, ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39, ZXing.BarcodeFormat.ITF]);
     hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-    zxingReader = new ZXing.BrowserMultiFormatReader(hints, 120);
-    zxingReader.decodeFromStream(s, video, (result) => {
-      if (result && scanning) onDetected(result.getText());
-    });
+    const reader = new ZXing.MultiFormatReader();
+    reader.setHints(hints);
+    const c = document.createElement("canvas");
+    const g = c.getContext("2d", { willReadFrequently: true });
+    const loop = () => {
+      if (!scanning || stream !== s) return;
+      if (video.videoWidth && !busy) {
+        const k = Math.min(1, 1280 / Math.max(video.videoWidth, video.videoHeight));
+        c.width = Math.round(video.videoWidth * k);
+        c.height = Math.round(video.videoHeight * k);
+        g.drawImage(video, 0, 0, c.width, c.height);
+        try {
+          const res = reader.decodeWithState(new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(new ZXing.HTMLCanvasElementLuminanceSource(c))));
+          const pts = (res.getResultPoints() || []).map(p => ({ x: p.getX() / k, y: p.getY() / k }));
+          onDetected(res.getText(), cornersFromLine(pts));
+        } catch (e) { }
+      }
+      detectTimer = setTimeout(loop, 140);
+    };
+    loop();
   }
 
   function tuneCamera(s) {
@@ -619,7 +727,8 @@
     let t = "PLU: " + parsed.plu + " · " + (parsed.valType === "price" ? "Tutar: " + tl(parsed.amount) : "Ağırlık: " + kgFmt(parsed.kg) + " kg");
     if (!Scale.eanValid(code)) t += " · Kontrol hanesi hatalı";
     if (p) t += " → " + p.ad + " (" + tl(parsed.valType === "price" ? parsed.amount : parsed.kg * p.fiyat) + ")";
-    else if (s.unknownScale === "price") t += " → listede yok, '" + (s.unknownName || "Ağırlıklı işlem") + "' olarak " + tl(parsed.raw / 100) + " eklenir";
+    else if (s.unknownScale === "ocr") t += " → listede yok: '" + (s.unknownName || "Ağırlıklı işlem") + "', kg fiyatı etiketten okunur, okunamazsa sorulur";
+    else if (s.unknownScale === "ask") t += " → listede yok: '" + (s.unknownName || "Ağırlıklı işlem") + "', kg fiyatı sorulur";
     else t += " → ürün listede bulunamadı";
     $("sTestOut").textContent = t;
   }

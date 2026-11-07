@@ -1,10 +1,12 @@
-const CACHE = "fiyatgor-v5";
+const CACHE = "fiyatgor-v6";
 const FILES = [
   "./",
   "index.html",
   "styles.css",
   "app.js",
   "scale.js",
+  "ocr.js",
+  "vendor/ocr/tesseract.min.js",
   "manifest.webmanifest",
   "icon.svg",
   "icon-192.png",

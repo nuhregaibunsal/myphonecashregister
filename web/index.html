@@ -104,7 +104,8 @@
       <div class="grid">
         <label>Listede olmayan terazi etiketi
           <select id="sUnknown">
-            <option value="price">Tutarı oku, barkodsuz ürün olarak ekle</option>
+            <option value="ocr">Kg fiyatını etiketten oku, okunamazsa sor</option>
+            <option value="ask">Kg fiyatını sor</option>
             <option value="none">Bulunamadı de</option>
           </select>
         </label>
@@ -132,6 +133,22 @@
   <button data-tab="ayarlar" type="button">⚙️<span>Ayarlar</span></button>
 </nav>
 
+<dialog id="priceDialog">
+  <form method="dialog">
+    <h3 id="pTitle"></h3>
+    <p class="muted">Etiketteki kg fiyatını ya da tutarı yaz.</p>
+    <div class="grid">
+      <label>Kg fiyatı<input id="pUnit" inputmode="decimal" autocomplete="off"></label>
+      <label>Tutar<input id="pTotal" inputmode="decimal" autocomplete="off"></label>
+    </div>
+    <div class="quick" id="pQuick"></div>
+    <div class="row">
+      <button class="btn" value="cancel" type="submit">Vazgeç</button>
+      <button class="btn primary" value="ok" type="submit">Ekle</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="qtyDialog">
   <form method="dialog" id="qtyForm">
     <h3 id="qtyTitle"></h3>
@@ -147,6 +164,8 @@
 
 <script src="vendor/zxing.min.js" defer></script>
 <script src="vendor/xlsx.full.min.js" defer></script>
+<script src="vendor/ocr/tesseract.min.js" defer></script>
+<script src="ocr.js" defer></script>
 <script src="scale.js" defer></script>
 <script src="app.js" defer></script>
 </body>

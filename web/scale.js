@@ -8,7 +8,7 @@
     valLen: 5,
     valType: "weight",
     pluMatch: "both",
-    unknownScale: "price",
+    unknownScale: "ocr",
     unknownName: "Ağırlıklı işlem"
   };
 
@@ -45,6 +45,7 @@
   function findByPlu(products, parsed, s) {
     s = Object.assign({}, DEFAULTS, s || {});
     const mode = s.pluMatch;
+    if (parsed.pluNum === 0) return null;
     if (mode === "plu" || mode === "both") {
       const hit = products.find(p => p.plu !== "" && p.plu != null && parseInt(normCode(p.plu), 10) === parsed.pluNum);
       if (hit) return hit;
