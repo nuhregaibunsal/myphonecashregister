@@ -17,30 +17,28 @@ Uygulama Excel (.xlsx/.xls), CSV/TXT veya JSON kabul eder. Sütunları otomatik 
 
 ### FasterPOS / Vega (SQL Server, .mdf)
 
-Kasa bilgisayarında PowerShell açıp `araclar` klasörüne gidin:
+`araclar` klasörünü kasa bilgisayarına kopyalayıp `calistir.bat` dosyasına çift tıklayın.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\disari-aktar.ps1
+- Betik SQL servislerini listeler, bulduğu tüm SQL Server'lara bağlanmayı dener ve her denemenin hatasını yazar.
+- Windows girişiyle bağlanamazsa SQL kullanıcı adı ve şifresi sorar (boş geçilebilir).
+- Hiç bağlanamazsa kasa programının ayar dosyalarında bağlantı bilgisi arar.
+- Tek veritabanı varsa barkod/fiyat içeren tabloları doğrudan listeler.
+- Ekrana yazılan her şey `rapor.txt` dosyasına kaydedilir ve pencere Enter'a basılana kadar kapanmaz.
+
+Doğru tablo ya da sorgu belli olunca komut satırından:
+
+```bat
+calistir.bat -Veritabani VERITABANI_ADI -Sorgu "SELECT ... FROM ..."
 ```
 
-1. İlk çalıştırma veritabanlarını listeler.
-2. `-Veritabani <ad> -Kesfet` ile barkod/fiyat içeren tabloları bulur ve `kesif.txt` dosyasına yazar.
-3. Doğru tablo ya da sorgu belli olunca:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\disari-aktar.ps1 -Veritabani VERITABANI_ADI -Sorgu "SELECT ... FROM ..."
-```
-
-`urunler.csv` dosyası oluşur.
-
-Sunucu bulunamazsa `-Sunucu ".\SQLEXPRESS"` ekleyin. Windows girişi yetmezse `-Kullanici sa -Sifre ...` verin.
+`urunler.csv` dosyası oluşur. Ek seçenekler: `-Sunucu "PC\INSTANCE"`, `-Kullanici sa -Sifre ...`.
 
 ### CL Works Pro (terazi, .mdb)
 
 Terazideki PLU numaralarını almak için:
 
-```powershell
-C:\Windows\SysWOW64\WindowsPowerShell\v1.0\powershell.exe -ExecutionPolicy Bypass -File .\disari-aktar.ps1 -Mdb "C:\...\dosya.mdb" -Kesfet
+```bat
+calistir-32bit.bat -Mdb "C:\...\dosya.mdb" -Kesfet
 ```
 
 Ardından `-Tablo` ya da `-Sorgu` ile dışa aktarın.
