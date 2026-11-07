@@ -118,7 +118,7 @@
   }
 
   function addProduct(p) {
-    const code = Scale.normCode(String(p.barkod || "").split(/[;,|\s]+/)[0]) || ("PLU" + p.plu);
+    const code = Scale.normCode(String(p.barkod || "").split(/[;,|\s]+/)[0]) || (p.plu ? "PLU" + p.plu : "AD" + p.ad);
     if (isKg(p)) askQty(p, kg => pushItem({ ad: p.ad, fiyat: p.fiyat, birim: "KG", miktar: kg, tutar: kg * p.fiyat, kod: code }));
     else pushItem({ ad: p.ad, fiyat: p.fiyat, birim: p.birim || "ADET", miktar: 1, tutar: p.fiyat, kod: code });
   }
@@ -443,7 +443,7 @@
       fiyat: Math.round(toNumber(cell(r, "fiyat")) * 100) / 100,
       birim: String(cell(r, "birim") || "").trim().toUpperCase(),
       plu: Scale.normCode(cell(r, "plu"))
-    })).filter(p => p.ad && (p.barkod || p.plu));
+    })).filter(p => p.ad);
   }
 
   function renderPreview() {
@@ -457,9 +457,9 @@
 
   async function saveImport() {
     const list = mapped();
-    if (!list.length) { $("importMsg").textContent = "Eşleşen ürün yok. Ürün adı ve barkod/PLU sütunlarını seç."; return; }
+    if (!list.length) { $("importMsg").textContent = "Eşleşen ürün yok. Ürün adı sütununu seç."; return; }
     if ($("mergeMode").checked) {
-      const key = p => p.barkod || "PLU" + p.plu;
+      const key = p => p.barkod || (p.plu ? "PLU" + p.plu : "AD" + lower(p.ad));
       const m = new Map(products.map(p => [key(p), p]));
       list.forEach(p => m.set(key(p), Object.assign({}, m.get(key(p)) || {}, p)));
       products = Array.from(m.values());
