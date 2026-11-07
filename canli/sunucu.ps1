@@ -37,6 +37,7 @@ function Update-App {
     }
 }
 
+Add-Type -AssemblyName System.Web
 Add-Type -AssemblyName System.Web.Extensions
 $ser = New-Object System.Web.Script.Serialization.JavaScriptSerializer
 $ser.MaxJsonLength = [int]::MaxValue
@@ -47,9 +48,13 @@ $script:lastError = ""
 
 function Get-ProductsJson {
     if ($script:cache -and ((Get-Date) - $script:cacheAt).TotalSeconds -lt 30) { return ,$script:cache }
+    $inv = [System.Globalization.CultureInfo]::InvariantCulture
     $query = [System.IO.File]::ReadAllText((Join-Path $root "urunler.sql"))
     $conn = New-Object System.Data.SqlClient.SqlConnection($connStr)
-    $list = New-Object System.Collections.Generic.List[object]
+    $sb = New-Object System.Text.StringBuilder
+    $ms = [long]([datetime]::UtcNow - [datetime]"1970-01-01").TotalMilliseconds
+    [void]$sb.Append('{"updated":').Append($ms.ToString($inv)).Append(',"products":[')
+    $count = 0
     try {
         $conn.Open()
         $cmd = $conn.CreateCommand()
@@ -57,24 +62,25 @@ function Get-ProductsJson {
         $cmd.CommandTimeout = 60
         $r = $cmd.ExecuteReader()
         while ($r.Read()) {
-            $d = New-Object 'System.Collections.Generic.Dictionary[string,object]'
-            $d["barkod"] = [string]$r["barkod"]
-            $d["ad"] = [string]$r["ad"]
-            $d["fiyat"] = if ($r["fiyat"] -is [DBNull]) { 0 } else { [double]$r["fiyat"] }
-            $d["birim"] = [string]$r["birim"]
-            $d["plu"] = [string]$r["plu"]
-            $d["birimind"] = if ($r["birimind"] -is [DBNull]) { 0 } else { [int]$r["birimind"] }
-            $list.Add($d)
+            $fiyat = [double]0
+            if (-not ($r["fiyat"] -is [DBNull])) { $fiyat = [double]$r["fiyat"] }
+            $bi = [int]0
+            if (-not ($r["birimind"] -is [DBNull])) { $bi = [int]$r["birimind"] }
+            if ($count -gt 0) { [void]$sb.Append(',') }
+            [void]$sb.Append('{"barkod":').Append([System.Web.HttpUtility]::JavaScriptStringEncode([string]$r["barkod"], $true))
+            [void]$sb.Append(',"ad":').Append([System.Web.HttpUtility]::JavaScriptStringEncode([string]$r["ad"], $true))
+            [void]$sb.Append(',"fiyat":').Append($fiyat.ToString($inv))
+            [void]$sb.Append(',"birim":').Append([System.Web.HttpUtility]::JavaScriptStringEncode([string]$r["birim"], $true))
+            [void]$sb.Append(',"plu":').Append([System.Web.HttpUtility]::JavaScriptStringEncode([string]$r["plu"], $true))
+            [void]$sb.Append(',"birimind":').Append($bi.ToString($inv)).Append('}')
+            $count++
         }
         $r.Close()
     } finally {
         $conn.Close()
     }
-    $payload = New-Object 'System.Collections.Generic.Dictionary[string,object]'
-    $payload["updated"] = [long]([datetime]::UtcNow - [datetime]"1970-01-01").TotalMilliseconds
-    $payload["count"] = $list.Count
-    $payload["products"] = $list
-    $script:cache = [System.Text.Encoding]::UTF8.GetBytes($ser.Serialize($payload))
+    [void]$sb.Append('],"count":').Append($count.ToString($inv)).Append('}')
+    $script:cache = [System.Text.Encoding]::UTF8.GetBytes($sb.ToString())
     $script:cacheAt = Get-Date
     $script:lastError = ""
     return ,$script:cache
@@ -148,7 +154,7 @@ function Set-Price($ctx) {
     $line = "{0:yyyy-MM-dd HH:mm:ss};{1};{2};{3};{4};{5}" -f (Get-Date), $ind, ([string]$b["ad"]).Replace(";", " "), $eski, $yeni, $ip
     Add-Content -Path $changeLog -Value $line -Encoding UTF8
     Log "Fiyat degisti: birim $ind, $eski -> $yeni ($ip)"
-    SendJson $ctx 200 @{ ok = $true; eski = $eski; yeni = $yeni }
+    SendJson $ctx 200 @{ ok = $true; eski = [double]$eski; yeni = [double]$yeni }
 }
 
 $types = @{
@@ -180,12 +186,13 @@ function Handle($ctx) {
         } catch {
             $script:lastError = $_.Exception.Message
             Log "SQL hatasi: $($script:lastError)"
-            SendJson $ctx 503 @{ ok = $false; error = $script:lastError }
+            SendJson $ctx 503 @{ ok = $false; error = [string]$script:lastError }
         }
         return
     }
     if ($path -eq "/api/yetki") {
-        SendJson $ctx 200 @{ ok = $true; fiyat = (Test-Path $pinFile) }
+        $pinVar = [bool](Test-Path $pinFile)
+        SendJson $ctx 200 @{ ok = $true; fiyat = $pinVar }
         return
     }
     if ($path -eq "/api/fiyat") {
@@ -199,7 +206,7 @@ function Handle($ctx) {
     if ($path -eq "/api/durum") {
         $sqlOk = $true
         try { [void](Get-ProductsJson) } catch { $sqlOk = $false; $script:lastError = $_.Exception.Message }
-        SendJson $ctx 200 @{ ok = $true; sql = $sqlOk; error = $script:lastError; computer = $env:COMPUTERNAME }
+        SendJson $ctx 200 @{ ok = $true; sql = [bool]$sqlOk; error = [string]$script:lastError; computer = [string]$env:COMPUTERNAME }
         return
     }
     if ($path -eq "/" -or $path -eq "") { $path = "/index.html" }
