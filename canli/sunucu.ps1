@@ -209,6 +209,24 @@ function Invoke-CL([int]$plu, [decimal]$price) {
     }
 }
 
+function Invoke-CLSend([int]$item) {
+    $mdb = Get-CLMdb
+    if (-not $mdb) { return @() }
+    $helper = Join-Path $root "cl-terazi-gonder.ps1"
+    if (-not (Test-Path $helper)) { return @("ERR yardimci-yok") }
+    $ps32 = Join-Path $env:SystemRoot "SysWOW64\WindowsPowerShell\v1.0\powershell.exe"
+    if (-not (Test-Path $ps32)) { $ps32 = "powershell.exe" }
+    try {
+        $env:FG_CLPW = Get-CLPw
+        $out = & $ps32 -NoProfile -ExecutionPolicy Bypass -File $helper -Mdb $mdb -Item $item 2>&1
+        $env:FG_CLPW = ""
+        return @(@($out) | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
+    } catch {
+        $env:FG_CLPW = ""
+        return @("ERR $($_.Exception.Message)")
+    }
+}
+
 function TeraziPlu([string]$stokKodu) {
     if ($stokKodu -match '(?i)TRZ[^0-9]*0*([0-9]+)') { return [int]$Matches[1] }
     return 0
@@ -276,7 +294,20 @@ function Set-Price($ctx) {
                 Log "CL yazma: PLU $plu, fiyat $kg -> $cl"
                 if ($cl -like "OK *") {
                     $n = ($cl -split " ")[1]
-                    if ([int]$n -ge 1) { $teraziMesaj = "Terazi fiyati da guncellendi (urun kodu $plu). CL Works'u acip Gonder'e basin." }
+                    if ([int]$n -ge 1) {
+                        $lines = Invoke-CLSend $plu
+                        foreach ($l in $lines) { Log "Terazi gonderim: $l" }
+                        $son = @($lines | Where-Object { $_ -like "SONUC *" }) | Select-Object -Last 1
+                        $fails = @($lines | Where-Object { $_ -like "FAIL *" })
+                        if ($son -and $son -match '^SONUC (\d+)/(\d+)') {
+                            $okN = [int]$Matches[1]; $allN = [int]$Matches[2]
+                            if ($okN -eq $allN) { $teraziMesaj = "Terazilere gonderildi ($okN/$allN, urun kodu $plu)." }
+                            elseif ($okN -gt 0) { $teraziMesaj = "Terazilerin bir kismina gonderildi ($okN/$allN). Ulasilamayanlar: " + (($fails | ForEach-Object { ($_ -split " ")[1] }) -join ", ") + ". Onlar icin CL Works'te Gonder'e basin." }
+                            else { $teraziMesaj = "CL veritabani guncellendi ama hicbir teraziye ulasilamadi. CL Works'te Gonder'e basin." }
+                        } else {
+                            $teraziMesaj = "CL veritabani guncellendi, terazilere gonderilemedi. CL Works'te Gonder'e basin."
+                        }
+                    }
                     else { $teraziMesaj = "Terazide urun kodu $plu bulunamadi, terazi fiyati degismedi. CL Works'te bu urunun kodunu $plu yapin." }
                 } elseif ($cl) { $teraziMesaj = "Terazi guncellenemedi." }
             }
