@@ -137,6 +137,13 @@ function Set-Price($ctx) {
     try {
         $conn.Open()
         $cmd = $conn.CreateCommand()
+        $chk = $conn.CreateCommand()
+        $chk.CommandText = "SELECT COUNT(*) FROM dbo.F0101TBLBIRIMLEREX WHERE STOKNO = (SELECT STOKNO FROM dbo.F0101TBLBIRIMLEREX WHERE IND = @ind)"
+        [void]$chk.Parameters.AddWithValue("@ind", $ind)
+        if ([int]$chk.ExecuteScalar() -gt 1) {
+            SendJson $ctx 409 @{ ok = $false; error = "Bu urunun birden fazla birimi var (agirlik birimleri). Simdilik fiyatini Vega'dan degistirin." }
+            return
+        }
         $cmd.CommandText = "UPDATE dbo.F0101TBLBIRIMLEREX SET ESKIFIYAT1 = SATISFIYATI1, SATISFIYATI1 = @yeni, FIYATDEGISMETARIHI1 = GETDATE() WHERE IND = @ind AND (ABS(ISNULL(SATISFIYATI1, 0) - @eski) < 0.005 OR (ISNULL(SATISFIYATI1, 0) = 0 AND ABS(ISNULL(SATISFIYATI, 0) - @eski) < 0.005))"
         [void]$cmd.Parameters.AddWithValue("@yeni", $yeni)
         [void]$cmd.Parameters.AddWithValue("@eski", $eski)
