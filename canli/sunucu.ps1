@@ -359,8 +359,8 @@ function Print-Label([byte[]]$png, [int]$kopya) {
         $doc.PrintController = New-Object System.Drawing.Printing.StandardPrintController
         $doc.DefaultPageSettings.Margins = New-Object System.Drawing.Printing.Margins(0, 0, 0, 0)
         $ps = $null
-        foreach ($p in $doc.PrinterSettings.PaperSizes) { if ([math]::Abs($p.Width - 150) -le 3 -and [math]::Abs($p.Height - 390) -le 3) { $ps = $p; break } }
-        if (-not $ps) { $ps = New-Object System.Drawing.Printing.PaperSize("Etiket 38x99", 150, 390) }
+        foreach ($p in $doc.PrinterSettings.PaperSizes) { if ([math]::Abs($p.Width - 150) -le 3 -and [math]::Abs($p.Height - 389) -le 3) { $ps = $p; break } }
+        if (-not $ps) { $ps = New-Object System.Drawing.Printing.PaperSize("Etiket 38x98.8", 150, 389) }
         $doc.DefaultPageSettings.PaperSize = $ps
         $doc.DefaultPageSettings.Landscape = $false
         $state = @{ kalan = $kopya; img = $img }
@@ -369,7 +369,7 @@ function Print-Label([byte[]]$png, [int]$kopya) {
                 $e.Graphics.PageUnit = [System.Drawing.GraphicsUnit]::Millimeter
                 $e.Graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::NearestNeighbor
                 $e.Graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::Half
-                $e.Graphics.DrawImage($state.img, (New-Object System.Drawing.RectangleF(0, 0, 38, 99)))
+                $e.Graphics.DrawImage($state.img, (New-Object System.Drawing.RectangleF(0, 0, 38, 98.8)))
                 $state.kalan--
                 $e.HasMorePages = $state.kalan -gt 0
             }.GetNewClosure())

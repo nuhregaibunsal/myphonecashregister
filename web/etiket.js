@@ -81,59 +81,98 @@
 
   const doldur = (s, d) => String(s || "").replace(/\{(\w+)\}/g, (m, k) => (k in d ? d[k] : ""));
 
-  function kutuAc(ctx, o) {
-    const yon = ((o.yon || 0) % 360 + 360) % 360;
-    ctx.save();
-    ctx.translate((o.x + o.w / 2) * MM, (o.y + o.h / 2) * MM);
-    ctx.rotate(yon * Math.PI / 180);
-    const yan = yon % 180 !== 0;
-    return { bw: (yan ? o.h : o.w) * MM, bh: (yan ? o.w : o.h) * MM };
+  function kutu(duzen, fr) {
+    const k = duzen.birim, u = duzen.ustKayma || 0;
+    return { x: fr[0] / k * MM, y: (fr[1] / k - u) * MM, w: fr[2] / k * MM, h: fr[3] / k * MM };
   }
 
-  function metin(ctx, o, txt) {
-    const lines = txt.split("\n");
-    const { bw, bh } = kutuAc(ctx, o);
+  function kenarCiz(ctx, b, kenarlar) {
+    const x1 = Math.round(b.x) + 0.5, y1 = Math.round(b.y) + 0.5, x2 = Math.round(b.x + b.w) + 0.5, y2 = Math.round(b.y + b.h) + 0.5;
+    const seg = { sol: [x1, y1, x1, y2], sag: [x2, y1, x2, y2], ust: [x1, y1, x2, y1], alt: [x1, y2, x2, y2] };
+    ctx.strokeStyle = "#000";
+    ctx.beginPath();
+    kenarlar.forEach(k => { const s = seg[k]; if (s) { ctx.moveTo(s[0], s[1]); ctx.lineTo(s[2], s[3]); } });
+    ctx.stroke();
+  }
+
+  function sar(ctx, txt, w) {
+    const out = [];
+    txt.split("\n").forEach(par => {
+      let cur = "";
+      const words = par.split(" ");
+      words.forEach((wd, i) => {
+        const aday = cur ? cur + " " + wd : wd;
+        if (ctx.measureText(aday).width <= w) { cur = aday; return; }
+        if (cur) { out.push(cur); cur = ""; }
+        let parca = "";
+        for (const ch of wd) {
+          if (parca && ctx.measureText(parca + ch).width > w) { out.push(parca); parca = ""; }
+          parca += ch;
+        }
+        cur = parca;
+      });
+      out.push(cur);
+    });
+    return out;
+  }
+
+  function metin(ctx, b, o, txt) {
+    ctx.save();
+    ctx.translate(b.x + b.w / 2, b.y + b.h / 2);
+    if (o.dondur) ctx.rotate(-Math.PI / 2);
+    const bw = o.dondur ? b.h : b.w, bh = o.dondur ? b.w : b.h;
     const fam = FAM[o.font] || FAM.sans;
     let s = Math.max(4, Math.round((o.pt || 8) * PT));
-    const sigar = () => {
+    let lines = txt.split("\n");
+    if (o.kaydir) {
       ctx.font = s + "px " + fam;
-      return lines.every(l => ctx.measureText(l).width <= bw - 2) && (lines.length === 1 || lines.length * s * 1.1 <= bh + 2);
-    };
-    while (s > 6 && !sigar()) s--;
-    ctx.fillStyle = o.beyaz ? "#fff" : "#000";
-    ctx.textBaseline = "middle";
-    const hiza = o.hiza || "orta";
-    ctx.textAlign = hiza === "sol" ? "left" : hiza === "sag" ? "right" : "center";
-    const x = hiza === "sol" ? -bw / 2 + 2 : hiza === "sag" ? bw / 2 - 2 : 0;
-    lines.forEach((l, i) => ctx.fillText(l, x, (i - (lines.length - 1) / 2) * s * 1.1));
-    ctx.restore();
-  }
-
-  function barkod(ctx, o, kod) {
-    const b = ean13(kod);
-    const { bw, bh } = kutuAc(ctx, o);
-    ctx.fillStyle = "#000";
-    const yazi = Math.round((o.pt || 7) * PT);
-    if (b) {
-      const m = Math.max(1, Math.floor(bw / b.bits.length));
-      const x0 = -Math.round(b.bits.length * m / 2);
-      const barH = bh - yazi - 2;
-      for (let i = 0; i < b.bits.length; i++) if (b.bits[i] === "1") ctx.fillRect(x0 + i * m, -bh / 2, m, barH);
-      ctx.font = yazi + "px " + FAM.sans;
-      ctx.textAlign = "center"; ctx.textBaseline = "bottom";
-      ctx.fillText(b.metin, 0, bh / 2);
-    } else if (kod) {
-      ctx.font = yazi + "px " + FAM.sans;
-      ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillText(kod, 0, 0);
+      lines = sar(ctx, txt, bw - 4);
+    } else {
+      const sigar = () => {
+        ctx.font = s + "px " + fam;
+        return lines.every(l => ctx.measureText(l).width <= bw - 2) && lines.length * s * 1.1 <= bh + 2;
+      };
+      while (s > 6 && !sigar()) s--;
     }
+    ctx.beginPath();
+    ctx.rect(-bw / 2, -bh / 2, bw, bh);
+    ctx.clip();
+    ctx.fillStyle = o.zemin ? "#fff" : "#000";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const satir = s * (o.kaydir ? 1.04 : 1.1);
+    const ilk = o.hiza === "ust" ? -bh / 2 + satir / 2 + 1 : -(lines.length - 1) * satir / 2;
+    lines.forEach((l, i) => {
+      const y = ilk + i * satir;
+      if (o.kaydir && i > 0 && y + s / 2 > bh / 2 + 1) return;
+      ctx.fillText(l, 0, y);
+    });
     ctx.restore();
   }
 
-  function resim(ctx, o, img) {
-    const { bw, bh } = kutuAc(ctx, o);
-    ctx.drawImage(img, -bw / 2, -bh / 2, bw, bh);
-    ctx.restore();
+  function barkod(ctx, b, o, kod) {
+    const e = ean13(kod);
+    const yazi = Math.round((o.pt || 7) * PT);
+    ctx.fillStyle = "#000";
+    ctx.font = yazi + "px " + FAM.sans;
+    ctx.textAlign = "center";
+    if (e) {
+      const m = Math.max(1, Math.floor(b.w / e.bits.length));
+      const x0 = Math.round(b.x + (b.w - e.bits.length * m) / 2);
+      const barH = Math.round(b.h - yazi - 2);
+      for (let i = 0; i < e.bits.length; i++) if (e.bits[i] === "1") ctx.fillRect(x0 + i * m, Math.round(b.y), m, barH);
+      ctx.textBaseline = "bottom";
+      ctx.fillText(e.metin, b.x + b.w / 2, b.y + b.h);
+    } else if (kod) {
+      ctx.textBaseline = "middle";
+      ctx.fillText(kod, b.x + b.w / 2, b.y + b.h / 2);
+    }
+  }
+
+  function resim(ctx, b, o, img) {
+    if (!o.oran) { ctx.drawImage(img, b.x, b.y, b.w, b.h); return; }
+    const r = Math.min(b.w / img.width, b.h / img.height);
+    ctx.drawImage(img, b.x, b.y, img.width * r, img.height * r);
   }
 
   async function ciz(v, canvas, secenek) {
@@ -141,38 +180,50 @@
     const duzen = (secenek && secenek.duzen) || window.ETIKET_DUZEN;
     const d = degerler(v);
     const yerli = d.kod10.trim().toLocaleUpperCase("tr-TR") === "TURKIYE";
-    const RW = Math.round(duzen.genislik * MM), RH = Math.round(duzen.yukseklik * MM);
-    const r = document.createElement("canvas");
-    r.width = RW; r.height = RH;
-    const ctx = r.getContext("2d");
-    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, RW, RH);
-    ctx.strokeStyle = "#000"; ctx.lineWidth = 1;
+    const PW = Math.round(duzen.sayfa.en * MM), PH = Math.round(duzen.sayfa.boy * MM);
+    const c = document.createElement("canvas");
+    c.width = PW; c.height = PH;
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, PW, PH);
+    ctx.lineWidth = 1;
     for (const o of duzen.ogeler) {
       if (o.kosul === "yerli" && !yerli) continue;
       if (o.kosul === "yerliDegil" && yerli) continue;
-      if (o.tip === "kutu") { ctx.fillStyle = "#000"; ctx.fillRect(o.x * MM, o.y * MM, o.w * MM, o.h * MM); }
-      else if (o.tip === "cerceve") ctx.strokeRect(Math.round(o.x * MM) + 0.5, Math.round(o.y * MM) + 0.5, Math.round(o.w * MM), Math.round(o.h * MM));
-      else if (o.tip === "cizgi") { ctx.beginPath(); ctx.moveTo(Math.round(o.x * MM) + 0.5, Math.round(o.y * MM) + 0.5); ctx.lineTo(Math.round(o.x2 * MM) + 0.5, Math.round(o.y2 * MM) + 0.5); ctx.stroke(); }
-      else if (o.tip === "metin") metin(ctx, o, doldur(o.deger, d));
-      else if (o.tip === "barkod") barkod(ctx, o, doldur(o.deger, d));
-      else if (o.tip === "resim" && img[o.kaynak]) resim(ctx, o, img[o.kaynak]);
+      if (o.tip === "cizgi") {
+        const a = kutu(duzen, [o.fr[0], o.fr[1], 0, 0]), z = kutu(duzen, [o.fr[2], o.fr[3], 0, 0]);
+        ctx.strokeStyle = "#000"; ctx.beginPath();
+        ctx.moveTo(Math.round(a.x) + 0.5, Math.round(a.y) + 0.5); ctx.lineTo(Math.round(z.x) + 0.5, Math.round(z.y) + 0.5); ctx.stroke();
+        continue;
+      }
+      const b = kutu(duzen, o.fr);
+      if (o.zemin || o.cerceve) { ctx.fillStyle = o.zemin ? "#000" : "#fff"; ctx.fillRect(Math.round(b.x), Math.round(b.y), Math.round(b.w), Math.round(b.h)); }
+      if (o.tip === "metin") metin(ctx, b, o, doldur(o.deger, d));
+      else if (o.tip === "barkod") barkod(ctx, b, o, doldur(o.deger, d));
+      else if (o.tip === "resim" && img[o.kaynak]) resim(ctx, b, o, img[o.kaynak]);
+      if (o.cerceve) kenarCiz(ctx, b, ["sol", "sag", "ust", "alt"]);
+      else if (o.kenar) kenarCiz(ctx, b, o.kenar);
     }
-    const id = ctx.getImageData(0, 0, RW, RH);
+    const id = ctx.getImageData(0, 0, PW, PH);
     const p = id.data;
     for (let i = 0; i < p.length; i += 4) {
       const k = (p[i] * 299 + p[i + 1] * 587 + p[i + 2] * 114) / 1000 < 150 ? 0 : 255;
       p[i] = p[i + 1] = p[i + 2] = k; p[i + 3] = 255;
     }
     ctx.putImageData(id, 0, 0);
-    if (secenek && secenek.okuma) return r;
-    const c = canvas || document.createElement("canvas");
-    c.width = RH; c.height = RW;
-    const pc = c.getContext("2d");
-    pc.translate(0, RW);
-    pc.rotate(-Math.PI / 2);
-    pc.drawImage(r, 0, 0);
-    pc.setTransform(1, 0, 0, 1, 0, 0);
-    return c;
+    if (!(secenek && secenek.okuma)) {
+      if (!canvas) return c;
+      canvas.width = PW; canvas.height = PH;
+      canvas.getContext("2d").drawImage(c, 0, 0);
+      return canvas;
+    }
+    const r = canvas || document.createElement("canvas");
+    r.width = PH; r.height = PW;
+    const rc = r.getContext("2d");
+    rc.translate(PH, 0);
+    rc.rotate(Math.PI / 2);
+    rc.drawImage(c, 0, 0);
+    rc.setTransform(1, 0, 0, 1, 0, 0);
+    return r;
   }
 
   window.Etiket = { ciz, ean13, hazirla, degerler };
