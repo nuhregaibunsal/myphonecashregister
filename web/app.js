@@ -89,7 +89,8 @@
         fiyat: round2(p.fiyat),
         birim: String(p.birim || "").trim().toUpperCase(),
         plu: Scale.normCode(p.plu),
-        birimind: Number(p.birimind) || 0
+        birimind: Number(p.birimind) || 0,
+        kod: String(p.kod || "").trim()
       })).filter(p => p.ad);
       meta = { updated: data.updated || Date.now(), source: "Kasa bilgisayarı, canlı" };
       live = true;
@@ -127,23 +128,76 @@
     $("fMsg").className = "msg " + (kind || "");
   }
 
-  function selectForPrice(p) {
+  let unitData = null;
+
+  const unitFactor = u => (u.agirlik > 0 ? u.agirlik : 1) * (u.carpan > 0 ? u.carpan : 1);
+  const unitLabel = u => [u.birim, u.agirlik > 0 ? kgFmt(u.agirlik) + " kg" : "", u.barkod].filter(Boolean).join(" · ");
+
+  function recalcUnits() {
+    if (!unitData || unitData.birimler.length < 2) return;
+    const main = unitData.birimler[0];
+    const m = parseFloat(String($("fNew").value).replace(/\./g, "").replace(",", "."));
+    unitData.birimler.slice(1).forEach(u => {
+      const inp = $("fu-" + u.ind);
+      if (!inp || inp.dataset.touched) return;
+      inp.value = m > 0 ? String(round2(m / unitFactor(main) * unitFactor(u))).replace(".", ",") : "";
+    });
+  }
+
+  async function selectForPrice(p) {
     priceSel = p;
+    unitData = null;
     $("fCard").hidden = false;
     $("fName").textContent = p.ad;
-    $("fInfo").textContent = [p.barkod, p.birim ? lower(p.birim) : ""].filter(Boolean).join(" · ");
-    $("fOld").textContent = tl(p.fiyat);
+    $("fInfo").textContent = "Yükleniyor…";
+    $("fOld").textContent = "";
     $("fNew").value = "";
     $("fPin").value = pinCache && Date.now() - pinAt < 10 * 60000 ? pinCache : "";
-    $("fSave").disabled = false;
+    $("fSave").disabled = true;
     $("fSuggest").innerHTML = "";
     $("fSearch").value = "";
+    $("fUnitsBox").hidden = true;
+    $("fUnits").innerHTML = "";
     fMsg("");
-    setTimeout(() => $("fNew").focus(), 50);
+    try {
+      const res = await fetch("api/birimler?ind=" + encodeURIComponent(p.birimind), { cache: "no-store" });
+      const j = await res.json();
+      if (!res.ok || !j.ok || !j.birimler || !j.birimler.length) throw new Error(j.error || "bulunamadı");
+      if (priceSel !== p) return;
+      unitData = j;
+      const main = j.birimler[0];
+      $("fName").textContent = j.ad;
+      $("fInfo").textContent = [j.kod, main.barkod].filter(Boolean).join(" · ");
+      $("fOld").textContent = tl(main.fiyat) + " / " + lower(main.birim || "birim");
+      $("fNewLabel").textContent = "Yeni " + (main.birim || "") + " fiyatı";
+      if (j.birimler.length > 1) {
+        const ul = $("fUnits");
+        j.birimler.forEach((u, i) => {
+          const li = document.createElement("li");
+          li.innerHTML = '<div class="info"><b></b><span class="muted small"></span></div><input inputmode="decimal" autocomplete="off">';
+          li.querySelector("b").textContent = i === 0 ? unitLabel(u) + " (ana birim)" : unitLabel(u);
+          li.querySelector("span").textContent = "şu an " + tl(u.fiyat);
+          const inp = li.querySelector("input");
+          if (i === 0) { inp.disabled = true; inp.placeholder = "üstteki"; }
+          else {
+            inp.id = "fu-" + u.ind;
+            inp.oninput = () => { inp.dataset.touched = "1"; };
+          }
+          ul.appendChild(li);
+        });
+        $("fUnitsBox").hidden = false;
+      }
+      $("fSave").disabled = false;
+      setTimeout(() => $("fNew").focus(), 50);
+    } catch (e) {
+      $("fInfo").textContent = "";
+      fMsg("Ürünün birimleri okunamadı: " + e.message, "err");
+    }
   }
 
   function clearPriceSel() {
     priceSel = null;
+    unitData = null;
     $("fCard").hidden = true;
   }
 
@@ -155,36 +209,45 @@
       const li = document.createElement("li");
       li.innerHTML = '<div class="info"><b></b><span class="muted small"></span></div><strong></strong>';
       li.querySelector("b").textContent = x.ad;
-      li.querySelector("span").textContent = x.at.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }) + " · eski " + tl(x.eski);
+      li.querySelector("span").textContent = x.at.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }) + " · eski " + tl(x.eski) + (x.birimSayisi > 1 ? " · " + x.birimSayisi + " birim" : "");
       li.querySelector("strong").textContent = tl(x.yeni);
       ul.appendChild(li);
     });
   }
 
   async function savePrice() {
-    const p = priceSel;
-    if (!p) return;
-    const yeni = parseFloat(String($("fNew").value).replace(/\./g, "").replace(",", "."));
+    if (!priceSel || !unitData) return;
+    const num = v => parseFloat(String(v).replace(/\./g, "").replace(",", "."));
+    const main = unitData.birimler[0];
+    const yeni = num($("fNew").value);
     const pin = String($("fPin").value).trim();
     if (!(yeni > 0)) { fMsg("Yeni fiyatı yaz.", "err"); return; }
     if (!/^\d{4,8}$/.test(pin)) { fMsg("PIN 4-8 rakam olmalı.", "err"); return; }
+    const changes = [{ ind: main.ind, eski: main.fiyat, yeni: round2(yeni) }];
+    for (const u of unitData.birimler.slice(1)) {
+      const v = num($("fu-" + u.ind).value);
+      if (!(v > 0)) { fMsg(unitLabel(u) + " için fiyat yaz.", "err"); return; }
+      changes.push({ ind: u.ind, eski: u.fiyat, yeni: round2(v) });
+    }
+    const real = changes.filter(c => Math.abs(c.yeni - c.eski) >= 0.005);
+    if (!real.length) { fMsg("Fiyatlar zaten aynı.", "err"); return; }
     $("fSave").disabled = true;
     fMsg("Kaydediliyor…");
     try {
       const res = await fetch("api/fiyat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ birimind: p.birimind, eski: p.fiyat, yeni, pin, ad: p.ad })
+        body: JSON.stringify({ stok: unitData.stok, ad: unitData.ad, pin, degisiklikler: real })
       });
       const j = await res.json().catch(() => ({}));
       if (res.ok && j.ok) {
         pinCache = pin; pinAt = Date.now();
-        const eski = p.fiyat;
-        p.fiyat = round2(yeni);
-        priceLog.unshift({ ad: p.ad, eski, yeni: p.fiyat, at: new Date() });
+        real.forEach(c => { const pr = products.find(x => x.birimind === c.ind); if (pr) pr.fiyat = c.yeni; });
+        priceLog.unshift({ ad: unitData.ad, eski: main.fiyat, yeni: round2(yeni), birimSayisi: real.length, at: new Date() });
         renderPriceLog();
+        const ad = unitData.ad;
         clearPriceSel();
-        fMsg(p.ad + ": " + tl(eski) + " → " + tl(p.fiyat) + " kasaya kaydedildi", "ok");
+        fMsg(ad + ": " + tl(main.fiyat) + " → " + tl(round2(yeni)) + (real.length > 1 ? " (" + real.length + " birim)" : "") + " kasaya kaydedildi", "ok");
         await saveProducts();
         syncLive();
         return;
@@ -198,17 +261,34 @@
     $("fSave").disabled = false;
   }
 
+  const kodNorm = v => String(v || "").toLocaleUpperCase("tr-TR").replace(/[^0-9A-ZÇĞİÖŞÜ]/g, "").replace(/^([A-ZÇĞİÖŞÜ]*)0+(?=\d)/, "$1");
+
+  function findByKod(q) {
+    const k = kodNorm(q);
+    if (!k) return null;
+    const hits = products.filter(p => p.birimind && kodNorm(p.kod) === k);
+    return hits.length ? hits[0] : null;
+  }
+
   function priceFind(q) {
     q = String(q || "").trim();
     if (!q) return;
+    fMsg("");
+    const byKod = findByKod(q);
+    if (byKod) { selectForPrice(byKod); return; }
     if (/^\d+$/.test(q)) {
       const r = lookup(q);
-      if (r && r.product && !r.scale) { selectForPrice(r.product); return; }
-      fMsg(r && r.scale ? "Bu bir terazi etiketi. Ürünü isimle arayın." : "Bulunamadı: " + q, "err");
+      if (r && r.product) { selectForPrice(r.product); return; }
+      const n = parseInt(q, 10);
+      const trz = q.length <= 6 ? (findByKod("TRZ" + n) || byBarcode.get(String(n).padStart(5, "0"))) : null;
+      if (trz) { selectForPrice(trz); return; }
+      fMsg(r && r.scale ? "Bu terazi numarası (" + r.scale.plu + ") listede yok." : "Bulunamadı: " + q, "err");
       return;
     }
     const res = search(q, 2).filter(p => p.birimind);
     if (res.length === 1) selectForPrice(res[0]);
+    else if (!res.length) fMsg("Bulunamadı: " + q, "err");
+    else fMsg("Birden fazla ürün var, aşağıdaki listeden seç.", "err");
   }
 
   function renderPriceSuggest() {
@@ -369,7 +449,7 @@
 
   function handlePriceScan(code) {
     const r = lookup(code);
-    if (r && r.product && !r.scale) {
+    if (r && r.product) {
       beep(true);
       stopScan();
       selectForPrice(r.product);
@@ -836,7 +916,7 @@
     const words = q.split(/\s+/);
     const out = [];
     for (const p of products) {
-      const hay = lower(p.ad) + " " + p.barkod + " " + p.plu;
+      const hay = lower(p.ad) + " " + p.barkod + " " + p.plu + " " + lower(p.kod || "");
       if (words.every(w => hay.includes(w))) { out.push(p); if (out.length >= limit) break; }
     }
     return out;
@@ -848,7 +928,7 @@
     const li = document.createElement("li");
     li.innerHTML = '<div class="info"><b></b><span class="muted small"></span></div><strong></strong>';
     li.querySelector("b").textContent = p.ad;
-    li.querySelector("span").textContent = [p.barkod, p.plu ? "PLU " + p.plu : ""].filter(Boolean).join(" · ");
+    li.querySelector("span").textContent = [p.kod && p.kod !== p.barkod ? p.kod : "", p.barkod, p.plu ? "PLU " + p.plu : ""].filter(Boolean).join(" · ");
     li.querySelector("strong").textContent = tl(p.fiyat);
     li.onclick = () => onClick(p);
     return li;
@@ -882,7 +962,8 @@
     { key: "ad", label: "Ürün adı", hints: ["malincinsi", "urunadi", "stokadi", "ad", "adi", "isim", "name", "aciklama", "tanim", "urun", "stokismi", "pluadi"] },
     { key: "fiyat", label: "Satış fiyatı", hints: ["satisfiyati1", "satisfiyati", "satisfiyat", "fiyat", "fiyati", "price", "birimfiyat", "unitprice", "perakende", "satis"] },
     { key: "birim", label: "Birim", hints: ["birim", "birimi", "unit", "olcubirimi", "birimadi"] },
-    { key: "plu", label: "Terazi PLU no", hints: ["plu", "pluno", "plukodu", "terazino", "terazikodu", "itemcode", "kod", "stokkodu"] }
+    { key: "plu", label: "Terazi PLU no", hints: ["plu", "pluno", "plukodu", "terazino", "terazikodu", "itemcode"] },
+    { key: "kod", label: "Stok kodu", hints: ["kod", "stokkodu", "stokkod", "urunkodu"] }
   ];
   const slug = s => lower(s).replace(/[ıi̇]/g, "i").replace(/ş/g, "s").replace(/ğ/g, "g").replace(/ü/g, "u").replace(/ö/g, "o").replace(/ç/g, "c").replace(/[^a-z0-9]/g, "");
 
@@ -997,7 +1078,8 @@
       ad: String(cell(r, "ad") || "").trim(),
       fiyat: Math.round(toNumber(cell(r, "fiyat")) * 100) / 100,
       birim: String(cell(r, "birim") || "").trim().toUpperCase(),
-      plu: Scale.normCode(cell(r, "plu"))
+      plu: Scale.normCode(cell(r, "plu")),
+      kod: String(cell(r, "kod") || "").trim()
     })).filter(p => p.ad);
   }
 
@@ -1065,6 +1147,7 @@
     $("fForm").onsubmit = e => { e.preventDefault(); priceFind($("fSearch").value); };
     $("fSearch").oninput = renderPriceSuggest;
     $("fSave").onclick = savePrice;
+    $("fNew").oninput = recalcUnits;
     $("fCancel").onclick = () => { clearPriceSel(); fMsg(""); };
     $("aScan").onclick = () => { scanMode = "ekle"; aMsg(""); startScan(); window.scrollTo(0, 0); };
     $("aForm").onsubmit = saveProduct;

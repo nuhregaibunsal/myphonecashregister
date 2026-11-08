@@ -72,7 +72,8 @@ function Get-ProductsJson {
             [void]$sb.Append(',"fiyat":').Append($fiyat.ToString($inv))
             [void]$sb.Append(',"birim":').Append([System.Web.HttpUtility]::JavaScriptStringEncode([string]$r["birim"], $true))
             [void]$sb.Append(',"plu":').Append([System.Web.HttpUtility]::JavaScriptStringEncode([string]$r["plu"], $true))
-            [void]$sb.Append(',"birimind":').Append($bi.ToString($inv)).Append('}')
+            [void]$sb.Append(',"birimind":').Append($bi.ToString($inv))
+            [void]$sb.Append(',"kod":').Append([System.Web.HttpUtility]::JavaScriptStringEncode([string]$r["kod"], $true)).Append('}')
             $count++
         }
         $r.Close()
@@ -123,45 +124,80 @@ function Read-JsonBody($ctx) {
     return $ser.DeserializeObject($text)
 }
 
+function Get-Units([int]$birimInd) {
+    $conn = New-Object System.Data.SqlClient.SqlConnection($connStr)
+    $sb = New-Object System.Text.StringBuilder
+    try {
+        $conn.Open()
+        $cmd = $conn.CreateCommand()
+        $cmd.CommandText = "SELECT s.IND AS STOK, s.MALINCINSI, s.STOKKODU, s.ANABIRIM, b.IND, b.BIRIMADI, b.ACIKLAMA, b.CARPAN, b.AGIRLIK, b.BARCODE, CASE WHEN ISNULL(b.SATISFIYATI1, 0) > 0 THEN b.SATISFIYATI1 ELSE ISNULL(b.SATISFIYATI, 0) END AS FIYAT FROM dbo.F0101TBLBIRIMLEREX b JOIN dbo.F0101TBLSTOKLAR s ON s.IND = b.STOKNO WHERE b.STOKNO = (SELECT STOKNO FROM dbo.F0101TBLBIRIMLEREX WHERE IND = @ind) ORDER BY CASE WHEN b.IND = s.ANABIRIM THEN 0 ELSE 1 END, b.IND"
+        [void]$cmd.Parameters.AddWithValue("@ind", $birimInd)
+        $r = $cmd.ExecuteReader()
+        $i = 0
+        while ($r.Read()) {
+            if ($i -eq 0) {
+                $ana = 0
+                if (-not ($r["ANABIRIM"] -is [DBNull])) { $ana = [int]$r["ANABIRIM"] }
+                [void]$sb.Append('{"ok":true,"stok":').Append([int]$r["STOK"]).Append(',"ad":').Append((J ([string]$r["MALINCINSI"]))).Append(',"kod":').Append((J ([string]$r["STOKKODU"]))).Append(',"anaBirim":').Append($ana).Append(',"birimler":[')
+            } else { [void]$sb.Append(',') }
+            $carpan = 0; if (-not ($r["CARPAN"] -is [DBNull])) { $carpan = [double]$r["CARPAN"] }
+            $agirlik = 0; if (-not ($r["AGIRLIK"] -is [DBNull])) { $agirlik = [double]$r["AGIRLIK"] }
+            [void]$sb.Append('{"ind":').Append([int]$r["IND"]).Append(',"birim":').Append((J ([string]$r["BIRIMADI"]))).Append(',"aciklama":').Append((J ([string]$r["ACIKLAMA"]))).Append(',"carpan":').Append((N $carpan)).Append(',"agirlik":').Append((N $agirlik)).Append(',"barkod":').Append((J ([string]$r["BARCODE"]).Trim())).Append(',"fiyat":').Append((N $r["FIYAT"])).Append('}')
+            $i++
+        }
+        $r.Close()
+        if ($i -eq 0) { return $null }
+        [void]$sb.Append(']}')
+    } finally {
+        $conn.Close()
+    }
+    return ,([System.Text.Encoding]::UTF8.GetBytes($sb.ToString()))
+}
+
 function Set-Price($ctx) {
     $b = Read-JsonBody $ctx
     $pinState = Test-Pin ([string]$b["pin"])
     if ($pinState -eq "kapali") { SendJson $ctx 403 @{ ok = $false; error = "Fiyat degistirme kapali. Kurulumda PIN belirlenmedi." }; return }
     if ($pinState -eq "kilitli") { SendJson $ctx 423 @{ ok = $false; error = "Cok fazla yanlis PIN. 5 dakika bekleyin." }; return }
     if ($pinState -ne "ok") { SendJson $ctx 401 @{ ok = $false; error = "PIN yanlis." }; return }
-    $ind = [int]$b["birimind"]
-    $eski = [decimal]$b["eski"]
-    $yeni = [decimal]$b["yeni"]
-    if ($ind -le 0 -or $yeni -le 0 -or $yeni -ge 1000000) { SendJson $ctx 400 @{ ok = $false; error = "Gecersiz fiyat." }; return }
+    $stok = [int]$b["stok"]
+    $list = @($b["degisiklikler"])
+    if ($stok -le 0 -or $list.Count -lt 1 -or $list.Count -gt 30) { SendJson $ctx 400 @{ ok = $false; error = "Gecersiz istek." }; return }
+    foreach ($d in $list) {
+        $y = [decimal]$d["yeni"]
+        if ([int]$d["ind"] -le 0 -or $y -le 0 -or $y -ge 1000000) { SendJson $ctx 400 @{ ok = $false; error = "Gecersiz fiyat." }; return }
+    }
     $conn = New-Object System.Data.SqlClient.SqlConnection($connStr)
+    $done = New-Object System.Collections.Generic.List[string]
     try {
         $conn.Open()
-        $cmd = $conn.CreateCommand()
-        $chk = $conn.CreateCommand()
-        $chk.CommandText = "SELECT COUNT(*) FROM dbo.F0101TBLBIRIMLEREX WHERE STOKNO = (SELECT STOKNO FROM dbo.F0101TBLBIRIMLEREX WHERE IND = @ind)"
-        [void]$chk.Parameters.AddWithValue("@ind", $ind)
-        if ([int]$chk.ExecuteScalar() -gt 1) {
-            SendJson $ctx 409 @{ ok = $false; error = "Bu urunun birden fazla birimi var (agirlik birimleri). Simdilik fiyatini Vega'dan degistirin." }
-            return
+        $tx = $conn.BeginTransaction()
+        foreach ($d in $list) {
+            $cmd = $conn.CreateCommand()
+            $cmd.Transaction = $tx
+            $cmd.CommandText = "UPDATE dbo.F0101TBLBIRIMLEREX SET ESKIFIYAT1 = SATISFIYATI1, SATISFIYATI1 = @yeni, FIYATDEGISMETARIHI1 = GETDATE() WHERE IND = @ind AND STOKNO = @stok AND (ABS(ISNULL(SATISFIYATI1, 0) - @eski) < 0.005 OR (ISNULL(SATISFIYATI1, 0) = 0 AND ABS(ISNULL(SATISFIYATI, 0) - @eski) < 0.005))"
+            [void]$cmd.Parameters.AddWithValue("@yeni", [decimal]$d["yeni"])
+            [void]$cmd.Parameters.AddWithValue("@eski", [decimal]$d["eski"])
+            [void]$cmd.Parameters.AddWithValue("@ind", [int]$d["ind"])
+            [void]$cmd.Parameters.AddWithValue("@stok", $stok)
+            if ($cmd.ExecuteNonQuery() -ne 1) {
+                $tx.Rollback()
+                $script:cache = $null
+                SendJson $ctx 409 @{ ok = $false; error = "Bu urunun fiyati bu arada degismis. Hicbir birim degistirilmedi, liste yenilendi, tekrar deneyin." }
+                return
+            }
+            [void]$done.Add(("{0}:{1}->{2}" -f [int]$d["ind"], [decimal]$d["eski"], [decimal]$d["yeni"]))
         }
-        $cmd.CommandText = "UPDATE dbo.F0101TBLBIRIMLEREX SET ESKIFIYAT1 = SATISFIYATI1, SATISFIYATI1 = @yeni, FIYATDEGISMETARIHI1 = GETDATE() WHERE IND = @ind AND (ABS(ISNULL(SATISFIYATI1, 0) - @eski) < 0.005 OR (ISNULL(SATISFIYATI1, 0) = 0 AND ABS(ISNULL(SATISFIYATI, 0) - @eski) < 0.005))"
-        [void]$cmd.Parameters.AddWithValue("@yeni", $yeni)
-        [void]$cmd.Parameters.AddWithValue("@eski", $eski)
-        [void]$cmd.Parameters.AddWithValue("@ind", $ind)
-        $n = $cmd.ExecuteNonQuery()
+        $tx.Commit()
     } finally {
         $conn.Close()
     }
     $script:cache = $null
-    if ($n -ne 1) {
-        SendJson $ctx 409 @{ ok = $false; error = "Bu urunun fiyati bu arada degismis. Liste yenilendi, tekrar deneyin." }
-        return
-    }
     $ip = [string]$ctx.Request.RemoteEndPoint.Address
-    $line = "{0:yyyy-MM-dd HH:mm:ss};{1};{2};{3};{4};{5}" -f (Get-Date), $ind, ([string]$b["ad"]).Replace(";", " "), $eski, $yeni, $ip
+    $line = "{0:yyyy-MM-dd HH:mm:ss};FIYAT;{1};{2};{3};{4}" -f (Get-Date), $stok, ([string]$b["ad"]).Replace(";", " "), ($done -join " "), $ip
     Add-Content -Path $changeLog -Value $line -Encoding UTF8
-    Log "Fiyat degisti: birim $ind, $eski -> $yeni ($ip)"
-    SendJson $ctx 200 @{ ok = $true; eski = [double]$eski; yeni = [double]$yeni }
+    Log "Fiyat degisti: stok $stok, $($done -join ' ') ($ip)"
+    SendJson $ctx 200 @{ ok = $true; adet = [int]$done.Count }
 }
 
 function J([string]$v) { return [System.Web.HttpUtility]::JavaScriptStringEncode($v, $true) }
@@ -336,6 +372,17 @@ function Handle($ctx) {
     if ($path -eq "/api/yetki") {
         $pinVar = [bool](Test-Path $pinFile)
         SendJson $ctx 200 @{ ok = $true; fiyat = $pinVar }
+        return
+    }
+    if ($path -eq "/api/birimler") {
+        try {
+            $q = [int]("0" + [string]$ctx.Request.QueryString["ind"])
+            $res = Get-Units $q
+            if ($res) { Send $ctx 200 "application/json; charset=utf-8" $res $true } else { SendJson $ctx 404 @{ ok = $false; error = "Urun bulunamadi." } }
+        } catch {
+            Log "Birimler okunamadi: $($_.Exception.Message)"
+            SendJson $ctx 500 @{ ok = $false; error = [string]$_.Exception.Message }
+        }
         return
     }
     if ($path -eq "/api/listeler") {

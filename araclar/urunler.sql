@@ -7,7 +7,8 @@ SELECT
   x.fiyat,
   x.birim,
   x.plu,
-  x.birimind
+  x.birimind,
+  x.kod
 FROM (
   SELECT
     LTRIM(RTRIM(ISNULL(b.BARCODE, ''))) AS kod,
@@ -26,6 +27,7 @@ FROM (
         AND CAST(fs.PLU AS varchar(20)) NOT IN ('', '0')
     ), '') AS plu,
     b.IND AS birimind,
+    LTRIM(RTRIM(ISNULL(s.STOKKODU, ''))) AS kod,
     s.DELETED,
     s.IPTAL
   FROM dbo.F0101TBLBIRIMLEREX b
