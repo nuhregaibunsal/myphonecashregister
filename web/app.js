@@ -428,12 +428,12 @@
   async function loadLists() {
     try {
       const res = await fetch("api/listeler", { cache: "no-store" });
-      const j = await res.json();
-      if (!j || !j.ok) return;
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j || !j.ok) { aMsg("Seçim listeleri okunamadı: " + (j.error || ("HTTP " + res.status)), "err"); return; }
       lists = j;
       const fill = (sel, items, val, label) => {
         sel.innerHTML = "";
-        items.forEach(it => {
+        (items || []).forEach(it => {
           const o = document.createElement("option");
           o.value = val(it);
           o.textContent = label(it);
@@ -444,7 +444,10 @@
       fill($("aFiyatAdi"), j.fiyatAdi, x => x, x => x);
       fill($("aKdv"), j.kdv, x => x.ind, x => x.ad + " %" + Number(x.oran).toLocaleString("tr-TR"));
       resetAddForm();
-    } catch (e) { }
+      if (j.hatalar && j.hatalar.length) aMsg("Bazı listeler okunamadı: " + j.hatalar.join(" | "), "err");
+    } catch (e) {
+      aMsg("Seçim listeleri okunamadı: " + e.message, "err");
+    }
   }
 
   function aMsg(text, kind) {
@@ -1148,6 +1151,7 @@
     document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
     stopScan();
     if (name === "urunler") renderList();
+    if (name === "ekle" && canEditPrice && (!$("aBirim").options.length || !$("aKdv").options.length)) loadLists();
   }
 
   const FIELDS = [

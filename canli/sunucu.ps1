@@ -389,34 +389,38 @@ function N($v) { return ([double]$v).ToString([System.Globalization.CultureInfo]
 function Get-Lists {
     $conn = New-Object System.Data.SqlClient.SqlConnection($connStr)
     $sb = New-Object System.Text.StringBuilder
+    $hatalar = New-Object System.Collections.Generic.List[string]
+    $kdv = New-Object System.Collections.Generic.List[string]
+    $birim = New-Object System.Collections.Generic.List[string]
+    $fiyatAdi = New-Object System.Collections.Generic.List[string]
+    $next = 1
+    $nextBox = New-Object System.Collections.Generic.List[int]
     try {
         $conn.Open()
-        $cmd = $conn.CreateCommand()
-        $cmd.CommandText = "SELECT IND, ACIKLAMA, KDV FROM dbo.F0101TBLKDVGRUPLARI ORDER BY IND; SELECT DEGER FROM dbo.TBLBIRIMTAN ORDER BY IND; SELECT DEGER FROM dbo.TBLFIYATTAN ORDER BY IND; SELECT ISNULL(MAX(TRY_CAST(b.BARCODE AS int)), 0) + 1 FROM dbo.F0101TBLBIRIMLEREX b JOIN dbo.F0101TBLSTOKLAR s ON s.IND = b.STOKNO WHERE s.STOKKODU LIKE 'TRZ-%' AND LEN(b.BARCODE) BETWEEN 1 AND 6 AND b.BARCODE NOT LIKE '%[^0-9]%'"
-        $r = $cmd.ExecuteReader()
-        [void]$sb.Append('{"ok":true,"kdv":[')
-        $i = 0
-        while ($r.Read()) {
-            if ($i -gt 0) { [void]$sb.Append(',') }
-            [void]$sb.Append('{"ind":').Append([int]$r["IND"]).Append(',"ad":').Append((J ([string]$r["ACIKLAMA"]))).Append(',"oran":').Append((N $r["KDV"])).Append('}')
-            $i++
+        $q = {
+            param([string]$sql, [string]$ad, [scriptblock]$satir)
+            try {
+                $cmd = $conn.CreateCommand()
+                $cmd.CommandText = $sql
+                $r = $cmd.ExecuteReader()
+                try { while ($r.Read()) { & $satir $r } } finally { $r.Close() }
+            } catch {
+                [void]$hatalar.Add("$ad`: $($_.Exception.Message)")
+                Log "Liste okunamadi ($ad): $($_.Exception.Message)"
+            }
         }
-        [void]$r.NextResult()
-        [void]$sb.Append('],"birim":[')
-        $i = 0
-        while ($r.Read()) { if ($i -gt 0) { [void]$sb.Append(',') }; [void]$sb.Append((J ([string]$r["DEGER"]).Trim())); $i++ }
-        [void]$r.NextResult()
-        [void]$sb.Append('],"fiyatAdi":[')
-        $i = 0
-        while ($r.Read()) { if ($i -gt 0) { [void]$sb.Append(',') }; [void]$sb.Append((J ([string]$r["DEGER"]).Trim())); $i++ }
-        [void]$r.NextResult()
-        $next = 1
-        if ($r.Read()) { $next = [int]$r[0] }
-        [void]$sb.Append('],"sonrakiPlu":').Append((J ($next.ToString().PadLeft(5, "0")))).Append('}')
-        $r.Close()
+        & $q "SELECT IND, ACIKLAMA, KDV FROM dbo.F0101TBLKDVGRUPLARI ORDER BY IND" "kdv" { param($r) [void]$kdv.Add(('{"ind":' + [int]$r["IND"] + ',"ad":' + (J ([string]$r["ACIKLAMA"])) + ',"oran":' + (N $r["KDV"]) + '}')) }
+        & $q "SELECT DEGER FROM dbo.TBLBIRIMTAN ORDER BY IND" "birim" { param($r) $v = ([string]$r["DEGER"]).Trim(); if ($v) { [void]$birim.Add((J $v)) } }
+        & $q "SELECT DEGER FROM dbo.TBLFIYATTAN ORDER BY IND" "fiyatAdi" { param($r) $v = ([string]$r["DEGER"]).Trim(); if ($v) { [void]$fiyatAdi.Add((J $v)) } }
+        & $q "SELECT ISNULL(MAX(CASE WHEN LEN(b.BARCODE) BETWEEN 1 AND 6 AND b.BARCODE NOT LIKE '%[^0-9]%' THEN CAST(b.BARCODE AS int) END), 0) + 1 FROM dbo.F0101TBLBIRIMLEREX b JOIN dbo.F0101TBLSTOKLAR s ON s.IND = b.STOKNO WHERE s.STOKKODU LIKE 'TRZ-%'" "sonrakiPlu" { param($r) if (-not ($r[0] -is [DBNull])) { [void]$nextBox.Add([int]$r[0]) } }
     } finally {
         $conn.Close()
     }
+    if ($nextBox.Count -gt 0) { $next = $nextBox[0] }
+    if ($birim.Count -eq 0) { foreach ($v in @("ADET", "KG")) { [void]$birim.Add((J $v)) } }
+    if ($fiyatAdi.Count -eq 0) { [void]$fiyatAdi.Add((J "FIYAT")) }
+    [void]$sb.Append('{"ok":true,"kdv":[').Append(($kdv -join ",")).Append('],"birim":[').Append(($birim -join ",")).Append('],"fiyatAdi":[').Append(($fiyatAdi -join ","))
+    [void]$sb.Append('],"sonrakiPlu":').Append((J ($next.ToString().PadLeft(5, "0")))).Append(',"hatalar":[').Append((($hatalar | ForEach-Object { J $_ }) -join ",")).Append(']}')
     return ,([System.Text.Encoding]::UTF8.GetBytes($sb.ToString()))
 }
 
