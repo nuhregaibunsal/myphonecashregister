@@ -183,6 +183,8 @@
     $("fUnitsBox").hidden = true;
     $("fUnits").innerHTML = "";
     $("fTerazi").hidden = true;
+    $("fEtiketBox").hidden = true;
+    $("fEtiketSon").hidden = true;
     fMsg("");
     try {
       const res = await fetch("api/birimler?ind=" + encodeURIComponent(p.birimind), { cache: "no-store" });
@@ -213,6 +215,7 @@
         $("fUnitsBox").hidden = false;
       }
       $("fSave").disabled = false;
+      fillEtiketUnits();
       const tk = trzKod(j.kod);
       if (tk) showTerazi(p, tk);
       setTimeout(() => $("fNew").focus(), 50);
@@ -220,6 +223,62 @@
       $("fInfo").textContent = "";
       fMsg("Ürünün birimleri okunamadı: " + e.message, "err");
     }
+  }
+
+  let eCanvas = null, eVeri = null;
+
+  function eMsg(text, kind) {
+    $("eMsg").textContent = text || "";
+    $("eMsg").className = "msg " + (kind || "");
+  }
+
+  function fillEtiketUnits() {
+    const sel = $("eBirim");
+    sel.innerHTML = "";
+    (unitData ? unitData.birimler : []).forEach(u => {
+      const o = document.createElement("option");
+      o.value = u.ind;
+      o.textContent = unitLabel(u);
+      sel.appendChild(o);
+    });
+    eCanvas = null;
+    $("eResim").hidden = true;
+    eMsg("");
+    $("fEtiketBox").hidden = !sel.options.length;
+  }
+
+  async function etiketHazirla() {
+    if (!window.Etiket) throw new Error("etiket çizici yüklenmedi");
+    const res = await fetch("api/etiket?ind=" + encodeURIComponent($("eBirim").value), { cache: "no-store" });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok || !j.ok) throw new Error(j.error || ("HTTP " + res.status));
+    eVeri = j;
+    eCanvas = await Etiket.ciz(j);
+    $("eResim").src = eCanvas.toDataURL("image/png");
+    $("eResim").hidden = false;
+  }
+
+  async function etiketOnizle() {
+    eMsg("Hazırlanıyor…");
+    try { await etiketHazirla(); eMsg(""); } catch (e) { eMsg("Etiket hazırlanamadı: " + e.message, "err"); }
+  }
+
+  async function etiketYazdir() {
+    const k = parseInt($("eKopya").value, 10);
+    if (!(k >= 1 && k <= 50)) { eMsg("Kopya sayısı 1-50 arası olmalı.", "err"); return; }
+    $("eYazdir").disabled = true;
+    eMsg("Yazdırılıyor…");
+    try {
+      await etiketHazirla();
+      const blob = await new Promise(r => eCanvas.toBlob(r, "image/png"));
+      const res = await fetch("api/etiket?kopya=" + k + "&ad=" + encodeURIComponent(eVeri.ad || ""), { method: "POST", headers: { "Content-Type": "image/png" }, body: blob });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok && j.ok) eMsg(k + " etiket yazıcıya gönderildi (" + j.yazici + ").", "ok");
+      else eMsg(j.error || ("Yazdırılamadı (" + res.status + ")"), "err");
+    } catch (e) {
+      eMsg("Yazdırılamadı: " + e.message, "err");
+    }
+    $("eYazdir").disabled = false;
   }
 
   function clearPriceSel() {
@@ -274,7 +333,14 @@
         priceLog.unshift({ ad: unitData.ad, eski: main.fiyat, yeni: round2(yeni), birimSayisi: real.length, at: new Date() });
         renderPriceLog();
         const ad = unitData.ad;
+        const saved = priceSel;
         clearPriceSel();
+        $("fEtiketSon").hidden = false;
+        $("fEtiketSon").onclick = async () => {
+          $("fEtiketSon").hidden = true;
+          await selectForPrice(saved);
+          if (!$("fEtiketBox").hidden) { $("fEtiketBox").scrollIntoView({ behavior: "smooth" }); etiketOnizle(); }
+        };
         let msg = ad + ": " + tl(main.fiyat) + " → " + tl(round2(yeni)) + (real.length > 1 ? " (" + real.length + " birim)" : "") + " kasaya kaydedildi";
         if (j.teraziMesaj) msg += ". " + j.teraziMesaj;
         fMsg(msg, "ok");
@@ -1345,6 +1411,9 @@
     $("fSearch").oninput = renderPriceSuggest;
     $("fSave").onclick = savePrice;
     $("tKodBtn").onclick = toggleSameCodes;
+    $("eOnizle").onclick = etiketOnizle;
+    $("eYazdir").onclick = etiketYazdir;
+    $("eBirim").onchange = () => { eCanvas = null; $("eResim").hidden = true; eMsg(""); };
     $("tKodGizle").onchange = () => { if (tKodOpen) showSameCodes(false); };
     $("fNew").oninput = recalcUnits;
     $("fCancel").onclick = () => { clearPriceSel(); fMsg(""); };

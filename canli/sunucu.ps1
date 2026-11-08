@@ -304,6 +304,82 @@ function Get-CLUsed {
     return $used
 }
 
+function Get-LabelData([int]$ind) {
+    $conn = New-Object System.Data.SqlClient.SqlConnection($connStr)
+    try {
+        $conn.Open()
+        $cmd = $conn.CreateCommand()
+        $cmd.CommandText = "SELECT s.*, b.BARCODE AS E_BARKOD, CASE WHEN ISNULL(b.SATISFIYATI1,0)>0 THEN b.SATISFIYATI1 ELSE ISNULL(b.SATISFIYATI,0) END AS E_FIYAT, b.FIYATDEGISMETARIHI1 AS E_TARIH, b.AGIRLIK AS E_AGIRLIK, b.BIRIMADI AS E_BIRIM FROM dbo.F0101TBLBIRIMLEREX b JOIN dbo.F0101TBLSTOKLAR s ON s.IND = b.STOKNO WHERE b.IND = @i"
+        [void]$cmd.Parameters.AddWithValue("@i", $ind)
+        $r = $cmd.ExecuteReader()
+        try {
+            if (-not $r.Read()) { return $null }
+            $cols = @{}
+            for ($i = 0; $i -lt $r.FieldCount; $i++) { if (-not $cols.ContainsKey($r.GetName($i))) { $cols[$r.GetName($i)] = $i } }
+            $v = { param($n) if ($cols.ContainsKey($n) -and -not $r.IsDBNull($cols[$n])) { $r.GetValue($cols[$n]) } else { $null } }
+            $tarih = & $v "E_TARIH"
+            $tarihTxt = if ($tarih) { ([datetime]$tarih).ToString("yyyy-MM-ddTHH:mm:ss") } else { "" }
+            $sb = New-Object System.Text.StringBuilder
+            [void]$sb.Append('{"ok":true,"ad":').Append((J ([string](& $v "MALINCINSI"))))
+            [void]$sb.Append(',"barkod":').Append((J ([string](& $v "E_BARKOD")).Trim()))
+            [void]$sb.Append(',"fiyat":').Append((N ([double](& $v "E_FIYAT"))))
+            [void]$sb.Append(',"agirlik":').Append((N ([double](& $v "E_AGIRLIK"))))
+            [void]$sb.Append(',"birim":').Append((J ([string](& $v "E_BIRIM"))))
+            [void]$sb.Append(',"tarih":').Append((J $tarihTxt))
+            foreach ($k in @("KOD6", "KOD7", "KOD10")) { [void]$sb.Append(',"' + $k.ToLowerInvariant() + '":').Append((J ([string](& $v $k)).Trim())) }
+            [void]$sb.Append('}')
+            return ,([System.Text.Encoding]::UTF8.GetBytes($sb.ToString()))
+        } finally { $r.Close() }
+    } finally { $conn.Close() }
+}
+
+$printerFile = Join-Path $root "yazici.txt"
+function Get-LabelPrinter {
+    Add-Type -AssemblyName System.Drawing
+    $all = @([System.Drawing.Printing.PrinterSettings]::InstalledPrinters)
+    if (Test-Path $printerFile) {
+        $n = ([System.IO.File]::ReadAllText($printerFile)).Trim()
+        if ($n -and ($all -contains $n)) { return $n }
+    }
+    $hit = @($all | Where-Object { $_ -match '(?i)barkod|sbarco|etiket' }) | Select-Object -First 1
+    return [string]$hit
+}
+
+function Print-Label([byte[]]$png, [int]$kopya) {
+    Add-Type -AssemblyName System.Drawing
+    $name = Get-LabelPrinter
+    if (-not $name) { throw "Etiket yazicisi bulunamadi. C:\FiyatGor\yazici.txt dosyasina yazicinin adini yazin." }
+    $ms = New-Object System.IO.MemoryStream(, $png)
+    $img = [System.Drawing.Image]::FromStream($ms)
+    $doc = New-Object System.Drawing.Printing.PrintDocument
+    try {
+        $doc.PrinterSettings.PrinterName = $name
+        if (-not $doc.PrinterSettings.IsValid) { throw "Yazici kullanilamiyor: $name" }
+        $doc.DocumentName = "FiyatGor etiket"
+        $doc.PrintController = New-Object System.Drawing.Printing.StandardPrintController
+        $doc.DefaultPageSettings.Margins = New-Object System.Drawing.Printing.Margins(0, 0, 0, 0)
+        $ps = $null
+        foreach ($p in $doc.PrinterSettings.PaperSizes) { if ([math]::Abs($p.Width - 150) -le 3 -and [math]::Abs($p.Height - 390) -le 3) { $ps = $p; break } }
+        if (-not $ps) { $ps = New-Object System.Drawing.Printing.PaperSize("Etiket 38x99", 150, 390) }
+        $doc.DefaultPageSettings.PaperSize = $ps
+        $doc.DefaultPageSettings.Landscape = $false
+        $state = @{ kalan = $kopya; img = $img }
+        $doc.add_PrintPage({
+                param($sender, $e)
+                $e.Graphics.PageUnit = [System.Drawing.GraphicsUnit]::Millimeter
+                $e.Graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::NearestNeighbor
+                $e.Graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::Half
+                $e.Graphics.DrawImage($state.img, (New-Object System.Drawing.RectangleF(0, 0, 38, 99)))
+                $state.kalan--
+                $e.HasMorePages = $state.kalan -gt 0
+            }.GetNewClosure())
+        $doc.Print()
+    } finally {
+        $doc.Dispose(); $img.Dispose(); $ms.Dispose()
+    }
+    return $name
+}
+
 function TeraziPlu([string]$stokKodu) {
     if ($stokKodu -match '(?i)TRZ[^0-9]*0*([0-9]+)') { return [int]$Matches[1] }
     return 0
@@ -619,6 +695,30 @@ function Handle($ctx) {
         try { Send $ctx 200 "application/json; charset=utf-8" (Get-CLList) $true } catch {
             Log "CL listesi okunamadi: $($_.Exception.Message)"
             SendJson $ctx 503 @{ ok = $false; error = [string]$_.Exception.Message }
+        }
+        return
+    }
+    if ($path -eq "/api/etiket") {
+        try {
+            if ($ctx.Request.HttpMethod -eq "POST") {
+                $kopya = [int]("0" + [string]$ctx.Request.QueryString["kopya"])
+                if ($kopya -lt 1 -or $kopya -gt 50) { SendJson $ctx 400 @{ ok = $false; error = "Kopya sayisi 1-50 olmali." }; return }
+                if ($ctx.Request.ContentLength64 -le 0 -or $ctx.Request.ContentLength64 -gt 2MB) { SendJson $ctx 400 @{ ok = $false; error = "Etiket resmi gecersiz." }; return }
+                $buf = New-Object System.IO.MemoryStream
+                $ctx.Request.InputStream.CopyTo($buf)
+                $png = $buf.ToArray()
+                if ($png.Length -lt 8 -or $png[0] -ne 0x89 -or $png[1] -ne 0x50) { SendJson $ctx 400 @{ ok = $false; error = "Etiket resmi PNG degil." }; return }
+                $yazici = Print-Label $png $kopya
+                Log ("Etiket yazdirildi: {0} kopya, {1} ({2})" -f $kopya, ([string]$ctx.Request.QueryString["ad"]), $yazici)
+                SendJson $ctx 200 @{ ok = $true; yazici = [string]$yazici; kopya = $kopya }
+            } else {
+                $q = [int]("0" + [string]$ctx.Request.QueryString["ind"])
+                $res = Get-LabelData $q
+                if ($res) { Send $ctx 200 "application/json; charset=utf-8" $res $true } else { SendJson $ctx 404 @{ ok = $false; error = "Birim bulunamadi." } }
+            }
+        } catch {
+            Log "Etiket hatasi: $($_.Exception.Message)"
+            SendJson $ctx 500 @{ ok = $false; error = [string]$_.Exception.Message }
         }
         return
     }

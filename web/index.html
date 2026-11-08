@@ -72,6 +72,7 @@
     </form>
     <ul class="suggest" id="fSuggest"></ul>
     <p class="msg" id="fMsg"></p>
+    <button class="btn" id="fEtiketSon" type="button" hidden>🏷 Yeni fiyatla etiket yazdır</button>
     <div class="card" id="fCard" hidden>
       <h2 id="fName"></h2>
       <p class="muted" id="fInfo"></p>
@@ -88,6 +89,19 @@
       <div class="row">
         <button class="btn" id="fCancel" type="button">Vazgeç</button>
         <button class="btn primary" id="fSave" type="button">Kasaya kaydet</button>
+      </div>
+      <div id="fEtiketBox" hidden>
+        <h3>Etiket</h3>
+        <div class="grid">
+          <label>Birim<select id="eBirim"></select></label>
+          <label>Kopya<input id="eKopya" inputmode="numeric" value="1" autocomplete="off"></label>
+        </div>
+        <div class="row">
+          <button class="btn" id="eOnizle" type="button">🏷 Önizle</button>
+          <button class="btn primary" id="eYazdir" type="button">Etiket yazdır</button>
+        </div>
+        <p class="msg" id="eMsg"></p>
+        <img id="eResim" class="etiket-resim" alt="Etiket önizleme" hidden>
       </div>
     </div>
     <div class="card">
@@ -275,6 +289,7 @@
 <script src="vendor/ocr/tesseract.min.js" defer></script>
 <script src="ocr.js" defer></script>
 <script src="scale.js" defer></script>
+<script src="etiket.js" defer></script>
 <script src="app.js" defer></script>
 </body>
 </html>

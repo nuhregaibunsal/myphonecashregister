@@ -152,3 +152,6 @@ summary { cursor: pointer; color: var(--muted); padding: 6px 0; }
 .msg.ok { color: var(--ok); font-weight: 600; }
 .msg.err { color: var(--err); font-weight: 600; }
 #tab-fiyat .card h2 { margin-bottom: 2px; }
+.etiket-resim { display: block; width: 152px; height: auto; margin: 8px auto 0; border: 1px solid var(--line); background: #fff; image-rendering: pixelated; }
+#fEtiketBox { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 8px; }
+#fEtiketSon { margin-bottom: 12px; }
