@@ -120,7 +120,31 @@
   function updatePriceTab() {
     $("tabFiyatBtn").hidden = !canEditPrice;
     $("tabEkleBtn").hidden = !canEditPrice;
+    $("guncelleCard").hidden = !live;
     if (canEditPrice) loadLists();
+  }
+
+  async function appGuncelle() {
+    $("guncelleBtn").disabled = true;
+    $("guncelleMsg").textContent = "Güncelleniyor, bekleyin…";
+    $("guncelleMsg").className = "msg";
+    try {
+      const res = await fetch("api/guncelle", { method: "POST" });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok && j.ok) {
+        $("guncelleMsg").textContent = "Güncellendi, uygulama yenileniyor…";
+        $("guncelleMsg").className = "msg ok";
+        try { if (window.caches) { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } } catch (e) { }
+        setTimeout(() => location.reload(), 800);
+        return;
+      }
+      $("guncelleMsg").textContent = j.error || j.mesaj || "Güncellenemedi.";
+      $("guncelleMsg").className = "msg err";
+    } catch (e) {
+      $("guncelleMsg").textContent = "Kasa bilgisayarına ulaşılamadı.";
+      $("guncelleMsg").className = "msg err";
+    }
+    $("guncelleBtn").disabled = false;
   }
 
   function fMsg(text, kind) {
@@ -1157,6 +1181,7 @@
     $("aTerazi").onchange = applyTerazi;
     $("aBarkod").oninput = checkBarcode;
     $("aKod").oninput = () => { kodTouched = true; };
+    $("guncelleBtn").onclick = appGuncelle;
     $("stopScan").onclick = stopScan;
     $("torch").onclick = toggleTorch;
     $("zoom").onclick = toggleZoom;

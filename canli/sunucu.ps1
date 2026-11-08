@@ -38,6 +38,29 @@ function Update-App {
     }
 }
 
+function Update-Web {
+    try {
+        $ProgressPreference = "SilentlyContinue"
+        $zip = Join-Path $env:TEMP "fiyatgor_web.zip"
+        $tmp = Join-Path $env:TEMP "fiyatgor_web"
+        (New-Object System.Net.WebClient).DownloadFile($zipUrl, $zip)
+        if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force }
+        Expand-Archive -Path $zip -DestinationPath $tmp -Force
+        $src = Get-ChildItem $tmp -Directory | Select-Object -First 1
+        $ok = $false
+        if ($src -and (Test-Path (Join-Path $src.FullName "web\index.html"))) {
+            Copy-Item -Path (Join-Path $src.FullName "web\*") -Destination $web -Recurse -Force
+            Copy-Item -Path (Join-Path $src.FullName "araclar\urunler.sql") -Destination $root -Force
+            Copy-Item -Path (Join-Path $src.FullName "canli\*.ps1") -Destination $root -Force
+            $ok = $true
+        }
+        Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item $zip -Force -ErrorAction SilentlyContinue
+        if ($ok) { Log "Web dosyalari guncellendi (istek uzerine)" }
+        return $ok
+    } catch { Log "Web guncelleme hatasi: $($_.Exception.Message)"; return $false }
+}
+
 Add-Type -AssemblyName System.Web
 Add-Type -AssemblyName System.Web.Extensions
 $ser = New-Object System.Web.Script.Serialization.JavaScriptSerializer
@@ -445,6 +468,15 @@ function Handle($ctx) {
             Log "Birimler okunamadi: $($_.Exception.Message)"
             SendJson $ctx 500 @{ ok = $false; error = [string]$_.Exception.Message }
         }
+        return
+    }
+    if ($path -eq "/api/guncelle") {
+        if ($ctx.Request.HttpMethod -ne "POST") { SendJson $ctx 405 @{ ok = $false; error = "POST gerekli" }; return }
+        try {
+            $ok = Update-Web
+            $script:cache = $null
+            SendJson $ctx 200 @{ ok = [bool]$ok; mesaj = $(if ($ok) { "Guncellendi" } else { "Guncellenemedi" }) }
+        } catch { SendJson $ctx 500 @{ ok = $false; error = [string]$_.Exception.Message } }
         return
     }
     if ($path -eq "/api/listeler") {
