@@ -1,7 +1,9 @@
 param([int]$Port = 8443)
 
 $ErrorActionPreference = "Stop"
-$root = Split-Path -Parent $MyInvocation.MyCommand.Path
+$selfPath = $MyInvocation.MyCommand.Path
+$selfHash = (Get-FileHash -LiteralPath $selfPath).Hash
+$root = Split-Path -Parent $selfPath
 $web = Join-Path $root "web"
 $webFull = [System.IO.Path]::GetFullPath($web).TrimEnd('\') + '\'
 $logFile = Join-Path $root "sunucu.log"
@@ -663,6 +665,12 @@ function Handle($ctx) {
 
 Log "Baslatiliyor"
 Update-App
+if (-not $env:FG_YENIDEN -and (Get-FileHash -LiteralPath $selfPath).Hash -ne $selfHash) {
+    Log "Sunucu dosyasi guncellendi, yeni surumle yeniden baslatiliyor"
+    $env:FG_YENIDEN = "1"
+    & $selfPath -Port $Port
+    exit
+}
 
 $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add("https://+:$Port/")
