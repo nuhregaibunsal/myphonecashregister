@@ -2,6 +2,7 @@
 
 ## Bekleyen
 ### Dükkanda denenecek (yazıldı)
+- [ ] Wireshark: CL'den 24 numaralı içeriği yalnız 192.168.1.153'e gönderirken yakala (filtre host 192.168.1.153), dosyayı gönder. İçerik gönderim protokolü için.
 - [ ] Etiket yazdırma (Sbarco, Fiyat sekmesi → Etiket): telefondan 1 kopya bas, Vega'nınkiyle karşılaştır. Yerleşim web/etiket-duzen.js (Vega tasarım birimleri). T.E.T.T = yazdırma günü + 366 gün, kayıt no KOD6, Yerli Üretim logosu KOD10 = TURKIYE.
 
 - [ ] Sabit fiyatlı terazi ürünü ekleme (Ekle → Terazi ürünü → Sabit fiyatlı): kasada birim ADET, barkod 28 + ürün kodu (5 hane) + 00001 + kontrol hanesi (örnek TRZ-430 → 2800430000018), CL'de tip 2. Adet. Yazıldı, dükkanda denenecek.
@@ -10,7 +11,7 @@
 
 ### Yapılacak
 - [ ] Var olan ürünlere telefondan yeni birim ekleme (örnek: KG ürününe 250 gr / 500 gr paket birimi, ağırlık ve barkodla). Vega'nın birim ekleme şekli (F0101TBLBIRIMLEREX satırı) incelenecek.
-- [ ] İçindekiler (CL Works → Veri → İçerik, sadece CL ve 2 paket terazisi): telefonda 3 bölüm. İçindekiler (başlık otomatik), Alerjen uyarısı (her kelime otomatik ~2 kalın), besin değerleri ayrı kutularda (boş bırakılan satır yazılmaz). Kod = ilk boş kod. Kaydedip yalnız paket terazilerine gönderme. Önce CL tablosu (canli/cl-icerik-kesif.ps1) ve gönderim paketi (Wireshark) incelenecek.
+- [ ] İçindekiler (CL Works → Veri → İçerik, sadece CL ve 2 paket terazisi): telefonda 3 bölüm. İçindekiler (başlık otomatik), Alerjen uyarısı (her kelime otomatik ~2 kalın), besin değerleri ayrı kutularda (boş bırakılan satır yazılmaz). Kod = ilk boş kod. Kaydedip yalnız paket terazilerine gönderme. Paket terazileri 192.168.1.153 ve 192.168.1.204. Kayıt no sabit TR-41-K-033887, tablo satırlarında tek boşluk. Alerjen için 14 zorunlu alerjenden seçim listesi (içerir / eser miktarda içerebilir). Önce CL tablosu TbIngredient (canli/cl-icerik-kesif.ps1) ve gönderim paketi (Wireshark) incelenecek.
 - [ ] Fiyat sorgu sayfası: kamera sürekli açık, okutulan ürünün adı ve fiyatı büyük yazılır. "Düzenle" ile fiyat değiştirme paneli açılır; panel elle ya da 5 saniye sonra kendiliğinden kapanır, açıkken yeni barkod okunursa yeni ürün gelir.
 - [ ] Telefondan stok girişi (mal kabul): ürünü okutup gelen miktarı Vega'ya işleme. Vega'nın stok girişini nasıl kaydettiği incelenecek.
 
