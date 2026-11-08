@@ -518,6 +518,14 @@
   }
 
   const OZEL = [1, 2, 3, 4, 5, 6, 7, 9, 10];
+  const BIZIM_KAYIT = "TR-41-K-033887";
+  let kayitOto = false;
+
+  function uretimYeriDegisti() {
+    const tr = $("aOk10").value.trim().toLocaleUpperCase("tr-TR").replace(/[İÜŞÇĞÖ]/g, c => ({ "İ": "I", "Ü": "U", "Ş": "S", "Ç": "C", "Ğ": "G", "Ö": "O" })[c]) === "TURKIYE";
+    if (tr && !$("aOk6").value.trim()) { $("aOk6").value = BIZIM_KAYIT; kayitOto = true; }
+    else if (!tr && kayitOto && $("aOk6").value === BIZIM_KAYIT) { $("aOk6").value = ""; kayitOto = false; }
+  }
 
   function aMsg(text, kind) {
     $("aMsg").textContent = text || "";
@@ -654,6 +662,7 @@
     ["aBarkod", "aKod", "aAd", "aF1", "aF2", "aF3", "aAlis", "aAlisKdv", "aUretici"].forEach(id => { $(id).value = ""; });
     $("aTerazi").checked = false;
     OZEL.forEach(n => { $("aOk" + n).value = ""; });
+    kayitOto = false;
     $("aClBox").hidden = true;
     resetClFields();
     $("aKdvDahil").checked = false;
@@ -1481,6 +1490,9 @@
       updateClInfo();
     };
     $("aSabit").onchange = applySabit;
+    $("aOk10").addEventListener("input", uretimYeriDegisti);
+    $("aOk10").addEventListener("change", uretimYeriDegisti);
+    $("aOk6").addEventListener("input", () => { kayitOto = false; });
     $("aAd").addEventListener("input", () => { if (!clAdTouched) $("aClAd").value = clAdi($("aAd").value); });
     $("aClAd").oninput = () => { clAdTouched = true; };
     $("aClPlu").oninput = () => checkClPlu(false);
