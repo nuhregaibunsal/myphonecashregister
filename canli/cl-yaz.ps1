@@ -3,6 +3,7 @@ param(
     [Parameter(Mandatory = $true)][int]$Item,
     [decimal]$Price = -1,
     [string]$Name = "",
+    [string]$Pw = "",
     [switch]$SadeceOku
 )
 
@@ -12,10 +13,13 @@ try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 
 if (-not (Test-Path -LiteralPath $Mdb)) { Write-Output "ERR dosya-yok"; exit 2 }
 
+if (-not $Pw -and $env:FG_CLPW) { $Pw = $env:FG_CLPW }
+$pwPart = if ($Pw) { "Jet OLEDB:Database Password=$Pw;" } else { "" }
+
 $conn = $null
 foreach ($prov in @("Microsoft.ACE.OLEDB.16.0", "Microsoft.ACE.OLEDB.12.0", "Microsoft.Jet.OLEDB.4.0")) {
     try {
-        $c = New-Object System.Data.OleDb.OleDbConnection("Provider=$prov;Data Source=$Mdb;Persist Security Info=False;")
+        $c = New-Object System.Data.OleDb.OleDbConnection("Provider=$prov;Data Source=$Mdb;Persist Security Info=False;$pwPart")
         $c.Open()
         $conn = $c
         break

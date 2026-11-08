@@ -100,6 +100,15 @@ try {
         else { Warn "Bu yolda dosya yok, terazi guncelleme ayarlanmadi: $clYol" }
     } elseif (-not $mevcut) { Ok "Terazi guncelleme kapali (CL Works yolu verilmedi)" }
 
+    if (Test-Path $clTxt) {
+        $clPwTxt = "$dir\clpw.txt"
+        Write-Host "   Terazi veritabani SIFRELI ise sifresini girin (gizli yazilir, sadece bu bilgisayarda saklanir)." -ForegroundColor Gray
+        Write-Host "   Sifresizse ya da degismesin istiyorsaniz bos birakip Enter'a basin." -ForegroundColor Gray
+        $csec = Read-Host "   CL Works mdb sifresi" -AsSecureString
+        $cpw = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($csec))
+        if ($cpw) { [System.IO.File]::WriteAllText($clPwTxt, $cpw, (New-Object System.Text.UTF8Encoding($false))); Ok "Terazi veritabani sifresi kaydedildi" }
+    }
+
     Step "Guvenli baglanti sertifikasi hazirlaniyor"
     $cert = Get-ChildItem Cert:\LocalMachine\My | Where-Object { $_.FriendlyName -eq "FiyatGor" -and $_.NotAfter -gt (Get-Date).AddDays(30) } | Select-Object -First 1
     if (-not $cert) {

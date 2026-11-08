@@ -165,6 +165,9 @@ function Get-CLMdb {
     return ""
 }
 
+$clPwFile = Join-Path $root "clpw.txt"
+function Get-CLPw { try { if (Test-Path $clPwFile) { return ([System.IO.File]::ReadAllText($clPwFile)).TrimEnd("`r", "`n") } } catch { }; return "" }
+
 function Invoke-CL([int]$plu, [decimal]$price) {
     $mdb = Get-CLMdb
     if (-not $mdb) { return $null }
@@ -173,9 +176,12 @@ function Invoke-CL([int]$plu, [decimal]$price) {
     $ps32 = Join-Path $env:SystemRoot "SysWOW64\WindowsPowerShell\v1.0\powershell.exe"
     if (-not (Test-Path $ps32)) { $ps32 = "powershell.exe" }
     try {
+        $env:FG_CLPW = Get-CLPw
         $out = & $ps32 -NoProfile -ExecutionPolicy Bypass -File $helper -Mdb $mdb -Item $plu -Price $price 2>&1
+        $env:FG_CLPW = ""
         return ([string](@($out) | Where-Object { $_ } | Select-Object -Last 1)).Trim()
     } catch {
+        $env:FG_CLPW = ""
         return "ERR $($_.Exception.Message)"
     }
 }
