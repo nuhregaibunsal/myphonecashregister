@@ -47,6 +47,10 @@ Terazi bağlanınca bir şey göndermiyor; yakalamalarda görünen `00 00` ve `0
 | 1E | S | ? | hep boş | | | | |
 | 1F | S | ? | hep boş | | | | |
 
+PluType değerleri: 1 = Kilo, 2 = Adet, 3 = Parça.
+
+T5 (PLU 387 ŞİÇJ, Kilo) ve T6 (aynı ürün, Adet) körlemesine tahmin edildi; ikisi de 303 baytın tamamında yakalamayla birebir tuttu (checksum 0x2F / 0x2C), terazi W02:O01 ile kabul etti.
+
 FixedWeight (T3'te 12, T4'te 54 girildi) pakette hiç yok; bu komutla gönderilmiyor.
 
 ## Bilinmeyenler
