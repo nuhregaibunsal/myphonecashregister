@@ -328,7 +328,21 @@
     }
   }
 
-  async function showSameCodes() {
+  let tKodOpen = false;
+
+  function hideSameCodes() {
+    tKodOpen = false;
+    $("tKodList").innerHTML = "";
+    $("tKodMsg").textContent = "";
+    $("tKodBtn").textContent = "Aynı kodlu terazi ürünlerini göster";
+  }
+
+  async function toggleSameCodes() {
+    if (tKodOpen) { hideSameCodes(); return; }
+    await showSameCodes(true);
+  }
+
+  async function showSameCodes(force) {
     const ul = $("tKodList");
     const msg = $("tKodMsg");
     ul.innerHTML = "";
@@ -336,7 +350,8 @@
     msg.textContent = "Okunuyor…";
     $("tKodBtn").disabled = true;
     try {
-      const data = await loadCL(true);
+      const gizle = $("tKodGizle").checked;
+      const data = (await loadCL(force)).filter(x => !gizle || x.plu < 1000);
       const g = new Map();
       data.forEach(x => { if (!g.has(x.kod)) g.set(x.kod, []); g.get(x.kod).push(x); });
       const kasa = new Set(products.map(p => trzKod(p.kod)).filter(Boolean));
@@ -360,6 +375,8 @@
       const nf = groups.filter(x => x.farkli).length;
       msg.textContent = groups.length ? (groups.length + " kod birden fazla üründe kullanılıyor" + (nf ? ", " + nf + " tanesinde fiyatlar farklı." : ".")) : "Her ürün kodu tek bir terazi ürününde, aynı kodlu ürün yok.";
       msg.className = nf ? "msg err" : "msg ok";
+      tKodOpen = true;
+      $("tKodBtn").textContent = "Listeyi gizle";
     } catch (e) {
       msg.className = "msg err";
       msg.textContent = "Terazi ürünleri okunamadı: " + e.message;
@@ -1253,7 +1270,8 @@
     $("fForm").onsubmit = e => { e.preventDefault(); priceFind($("fSearch").value); };
     $("fSearch").oninput = renderPriceSuggest;
     $("fSave").onclick = savePrice;
-    $("tKodBtn").onclick = showSameCodes;
+    $("tKodBtn").onclick = toggleSameCodes;
+    $("tKodGizle").onchange = () => { if (tKodOpen) showSameCodes(false); };
     $("fNew").oninput = recalcUnits;
     $("fCancel").onclick = () => { clearPriceSel(); fMsg(""); };
     $("aScan").onclick = () => { scanMode = "ekle"; aMsg(""); startScan(); window.scrollTo(0, 0); };

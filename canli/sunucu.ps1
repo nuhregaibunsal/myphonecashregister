@@ -331,16 +331,19 @@ function Set-Price($ctx) {
                     if ([int]$n -ge 1) {
                         $lines = Invoke-CLSend $plu
                         foreach ($l in $lines) { Log "Terazi gonderim: $l" }
-                        $son = @($lines | Where-Object { $_ -like "SONUC *" }) | Select-Object -Last 1
-                        $fails = @($lines | Where-Object { $_ -like "FAIL *" })
-                        if ($son -and $son -match '^SONUC (\d+)/(\d+)') {
-                            $okN = [int]$Matches[1]; $allN = [int]$Matches[2]
-                            if ($okN -eq $allN) { $teraziMesaj = "Terazilere gonderildi ($okN/$allN, urun kodu $plu)." }
-                            elseif ($okN -gt 0) { $teraziMesaj = "Terazilerin bir kismina gonderildi ($okN/$allN). Ulasilamayanlar: " + (($fails | ForEach-Object { ($_ -split " ")[1] }) -join ", ") + ". Onlar icin CL Works'te Gonder'e basin." }
-                            else { $teraziMesaj = "CL veritabani guncellendi ama hicbir teraziye ulasilamadi. CL Works'te Gonder'e basin." }
-                        } else {
-                            $teraziMesaj = "CL veritabani guncellendi, terazilere gonderilemedi. CL Works'te Gonder'e basin."
+                        $okIp = @{}; $badIp = @{}
+                        foreach ($l in $lines) {
+                            $pp = $l -split " "
+                            if ($pp.Count -lt 2) { continue }
+                            if ($pp[0] -eq "OK") { $okIp[$pp[1]] = 1 } elseif ($pp[0] -eq "FAIL") { $badIp[$pp[1]] = 1 }
                         }
+                        foreach ($k in @($badIp.Keys)) { if ($okIp.ContainsKey($k)) { $okIp.Remove($k) } }
+                        $allN = $okIp.Count + $badIp.Count
+                        $okN = $okIp.Count
+                        if ($allN -eq 0) { $teraziMesaj = "CL veritabani guncellendi, terazilere gonderilemedi. CL Works'te Gonder'e basin." }
+                        elseif ($okN -eq $allN) { $teraziMesaj = "Terazilere gonderildi ($okN/$allN terazi, urun kodu $plu)." }
+                        elseif ($okN -gt 0) { $teraziMesaj = "$okN/$allN teraziye gonderildi. Ulasilamayanlar: " + ((@($badIp.Keys) | Sort-Object) -join ", ") + ". Onlar acilinca CL Works'te Gonder'e basin." }
+                        else { $teraziMesaj = "CL veritabani guncellendi ama hicbir teraziye ulasilamadi. CL Works'te Gonder'e basin." }
                     }
                     else { $teraziMesaj = "Terazide urun kodu $plu bulunamadi, terazi fiyati degismedi. CL Works'te bu urunun kodunu $plu yapin." }
                 } elseif ($cl) { $teraziMesaj = "Terazi guncellenemedi." }
