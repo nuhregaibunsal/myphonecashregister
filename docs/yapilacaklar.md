@@ -3,10 +3,6 @@
 ## Bekleyen
 ### Dükkanda denenecek (yazıldı)
 - [ ] Etiket yazdırma (Sbarco, Fiyat sekmesi → Etiket): telefondan 1 kopya bas, Vega'nınkiyle karşılaştır. Yerleşim web/etiket-duzen.js (Vega tasarım birimleri). T.E.T.T = yazdırma günü + 366 gün, kayıt no KOD6, Yerli Üretim logosu KOD10 = TURKIYE.
-- [ ] Terazi ürünü ekleme (Ekle sekmesi → Terazi ürünü): Vega + CL + doğrudan teraziye gönderim. TEST ürünüyle denenecek, sonra TEST hem Vega'dan hem CL'den silinecek.
-  - Kullanılmayan sütunlar mevcut bir TbPLU satırından kopyalanır, kullanılanlar formdan yazılır.
-  - PLU no elle yazılır; doluysa hata verir, ilk boş PLU önerilir.
-  - İçerik no varsayılan 0, son kullanma varsayılan 366, tip varsayılan 1 (Ağırlık), istenirse 2 (Adet).
 
 ### Yapılacak
 - [ ] **Sabit fiyatlı terazi ürünleri** (Adet tipinde): Ekle ve fiyat değiştirme ekranlarında destek (F=1A UseFixedPrice, F=05 UnitWeight hazır).
@@ -28,4 +24,5 @@
 - [x] Fiyat değişiminde ve gönderimde PLU 1000 ve üstü atlanır
 - [x] Aynı ürün kodlu terazi ürünlerini listeleme, fiyat ekranında birlikte değişecekleri gösterme
 - [x] Sunucu güncellenince kendini yeniden başlatır
+- [x] Terazi ürünü ekleme: Vega + CL + doğrudan teraziye gönderim, dükkanda denendi (TEST ürünü kaldı, Vega'da silme yok)
 - [x] Ekle ekranı seçim listeleri (izin.sql güncel hali çalıştırıldı)
