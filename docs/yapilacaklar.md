@@ -4,8 +4,9 @@
 ### Dükkanda denenecek (yazıldı)
 - [ ] Etiket yazdırma (Sbarco, Fiyat sekmesi → Etiket): telefondan 1 kopya bas, Vega'nınkiyle karşılaştır. Yerleşim web/etiket-duzen.js (Vega tasarım birimleri). T.E.T.T = yazdırma günü + 366 gün, kayıt no KOD6, Yerli Üretim logosu KOD10 = TURKIYE.
 
+- [ ] Sabit fiyatlı terazi ürünü ekleme (Ekle → Terazi ürünü → Sabit fiyatlı): kasada birim ADET, barkod 28 + ürün kodu (5 hane) + 00001 + kontrol hanesi (örnek TRZ-430 → 2800430000018), CL'de tip 2. Adet. Yazıldı, dükkanda denenecek.
+
 ### Yapılacak
-- [ ] **Sabit fiyatlı terazi ürünleri** (Adet tipinde): Ekle ve fiyat değiştirme ekranlarında destek (F=1A UseFixedPrice, F=05 UnitWeight hazır).
 - [ ] Telefondan eklenen ürünlere Vega özel kodlarının girilmesi (Tür = "Terazilikler", Marka = son tüketim tarihi, KOD6 = kayıt no, KOD10 = üretim yeri).
 - [ ] İçindekiler sisteminin bağlanması (şu an sadece içerik no seçiliyor).
 - [ ] Telefondan stok girişi (mal kabul): ürünü okutup gelen miktarı Vega'ya işleme. Vega'nın stok girişini nasıl kaydettiği incelenecek.

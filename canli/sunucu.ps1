@@ -491,10 +491,11 @@ function Get-Lists {
         & $q "SELECT DEGER FROM dbo.TBLBIRIMTAN ORDER BY IND" "birim" { param($r) $v = ([string]$r["DEGER"]).Trim(); if ($v) { [void]$birim.Add((J $v)) } }
         & $q "SELECT DEGER FROM dbo.TBLFIYATTAN ORDER BY IND" "fiyatAdi" { param($r) $v = ([string]$r["DEGER"]).Trim(); if ($v) { [void]$fiyatAdi.Add((J $v)) } }
         & $q "SELECT ISNULL(MAX(CASE WHEN LEN(b.BARCODE) BETWEEN 1 AND 6 AND b.BARCODE NOT LIKE '%[^0-9]%' THEN CAST(b.BARCODE AS int) END), 0) + 1 FROM dbo.F0101TBLBIRIMLEREX b JOIN dbo.F0101TBLSTOKLAR s ON s.IND = b.STOKNO WHERE s.STOKKODU LIKE 'TRZ-%'" "sonrakiPlu" { param($r) if (-not ($r[0] -is [DBNull])) { [void]$nextBox.Add([int]$r[0]) } }
+        & $q "SELECT ISNULL(MAX(CASE WHEN LEN(SUBSTRING(STOKKODU, 5, 20)) BETWEEN 1 AND 6 AND SUBSTRING(STOKKODU, 5, 20) NOT LIKE '%[^0-9]%' THEN CAST(SUBSTRING(STOKKODU, 5, 20) AS int) END), 0) + 1 FROM dbo.F0101TBLSTOKLAR WHERE STOKKODU LIKE 'TRZ-%'" "sonrakiKod" { param($r) if (-not ($r[0] -is [DBNull])) { [void]$nextBox.Add([int]$r[0]) } }
     } finally {
         $conn.Close()
     }
-    if ($nextBox.Count -gt 0) { $next = $nextBox[0] }
+    if ($nextBox.Count -gt 0) { $next = [int]($nextBox | Measure-Object -Maximum).Maximum }
     if ($birim.Count -eq 0) { foreach ($v in @("ADET", "KG")) { [void]$birim.Add((J $v)) } }
     if ($fiyatAdi.Count -eq 0) { [void]$fiyatAdi.Add((J "FIYAT")) }
     [void]$sb.Append('{"ok":true,"kdv":[').Append(($kdv -join ",")).Append('],"birim":[').Append(($birim -join ",")).Append('],"fiyatAdi":[').Append(($fiyatAdi -join ","))

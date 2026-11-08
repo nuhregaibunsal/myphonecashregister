@@ -552,6 +552,7 @@
     const v = parseInt(raw, 10);
     try {
       const list = await loadCL(force);
+      updateClInfo();
       const used = new Map(list.filter(x => x.bolum === 1).map(x => [x.plu, x.ad]));
       let o = 1;
       while (o < 1000 && used.has(o)) o++;
@@ -569,11 +570,47 @@
     }
   }
 
+  const clAdi = v => String(v || "").replace(/\s*TRZ\s*NO\s*:?\s*\d*\s*$/i, "").trim().toLocaleUpperCase("tr-TR");
+
+  function sabitBarkod(n) {
+    if (!(n > 0 && n <= 99999)) return "";
+    const s = "28" + String(n).padStart(5, "0") + "00001";
+    const cs = (10 - (s.split("").reduce((a, v, i) => a + Number(v) * (i % 2 ? 3 : 1), 0) % 10)) % 10;
+    return s + cs;
+  }
+
   function updateClInfo() {
     const k = trzKod($("aKod").value);
-    $("aClInfo").textContent = k
+    let t = k
       ? "Terazi ürün kodu: " + k + " (stok kodundan). Terazi fiyatı: 1. satış fiyatı."
       : "Stok kodu TRZ-sayı olmalı (örnek TRZ-650), terazi ürün kodu ondan alınır.";
+    const ayni = k && clData ? clData.filter(x => x.kod === k && x.plu < 1000) : [];
+    if (ayni.length) t += " Dikkat: CL'de bu ürün kodu zaten var: " + ayni.map(x => "PLU " + x.plu + " " + x.ad).join(", ") + ". Fiyat değişince birlikte değişirler.";
+    $("aClInfo").textContent = t;
+    if ($("aSabit").checked) {
+      const b = sabitBarkod(k);
+      $("aSabitInfo").hidden = false;
+      $("aSabitInfo").textContent = b
+        ? "Kasa barkodu teraziden çıkacak sabit etiketle aynı: " + b + " (28 + ürün kodu " + String(k).padStart(5, "0") + " + 1 adet). Terazi tipi Adet, kasada birim ADET."
+        : "Sabit fiyatlı ürün için stok kodu TRZ-1 ile TRZ-99999 arası olmalı.";
+    } else $("aSabitInfo").hidden = true;
+  }
+
+  function applySabit() {
+    const on = $("aSabit").checked;
+    let n = trzKod($("aKod").value) || parseInt(lists && lists.sonrakiPlu, 10) || 0;
+    if (on) {
+      if (n) { $("aKod").value = "TRZ-" + n; kodTouched = true; }
+      $("aBarkod").value = sabitBarkod(n);
+      if ([...$("aBirim").options].some(o => o.value === "ADET")) $("aBirim").value = "ADET";
+      $("aClTip").value = "2";
+    } else {
+      if (n) $("aBarkod").value = String(n).padStart(5, "0");
+      kodTouched = false;
+      if ([...$("aBirim").options].some(o => o.value === "KG")) $("aBirim").value = "KG";
+      $("aClTip").value = "1";
+    }
+    checkBarcode();
   }
 
   function resetClFields() {
@@ -584,14 +621,17 @@
     $("aClSkt").value = "366";
     $("aClPluMsg").textContent = "";
     $("aClOneri").hidden = true;
+    $("aSabit").checked = false;
+    $("aSabitInfo").hidden = true;
     clAdTouched = false;
   }
 
   function applyTerazi() {
     const t = $("aTerazi").checked;
     $("aClBox").hidden = !t;
+    if (!t && $("aSabit").checked) { $("aSabit").checked = false; $("aSabitInfo").hidden = true; }
     if (t) {
-      if (!clAdTouched) $("aClAd").value = $("aAd").value.trim().toLocaleUpperCase("tr-TR");
+      if (!clAdTouched) $("aClAd").value = clAdi($("aAd").value);
       if (!$("aClIcerik").value.trim()) $("aClIcerik").value = "0";
       if (!$("aClSkt").value.trim()) $("aClSkt").value = "366";
       checkClPlu(true);
@@ -668,6 +708,12 @@
         skt: int("aClSkt")
       };
       if (!trzKod(data.stokKodu)) { aMsg("Terazi ürünü için stok kodu TRZ-sayı olmalı (örnek TRZ-650).", "err"); return; }
+      if ($("aSabit").checked) {
+        const sb = sabitBarkod(trzKod(data.stokKodu));
+        if (!sb) { aMsg("Sabit fiyatlı ürün için stok kodu TRZ-1 ile TRZ-99999 arası olmalı.", "err"); return; }
+        if (data.barkod !== sb) { aMsg("Sabit fiyatlı üründe barkod " + sb + " olmalı (stok kodundan hesaplanır).", "err"); return; }
+        if (data.cl.tip !== 2) { aMsg("Sabit fiyatlı üründe terazi tipi 2. Adet olmalı.", "err"); return; }
+      }
       if (!data.cl.ad) { aMsg("Terazideki adı yaz.", "err"); return; }
       if (!(data.cl.plu >= 1 && data.cl.plu < 1000)) { aMsg("Terazi PLU no yaz (1-999).", "err"); return; }
       if (data.cl.icerik < 0) { aMsg("İçerik no sayı olmalı (yoksa 0).", "err"); return; }
@@ -1422,8 +1468,13 @@
     $("aClear").onclick = () => { resetAddForm(); aMsg(""); };
     $("aTerazi").onchange = applyTerazi;
     $("aBarkod").oninput = checkBarcode;
-    $("aKod").oninput = () => { kodTouched = true; updateClInfo(); };
-    $("aAd").addEventListener("input", () => { if (!clAdTouched) $("aClAd").value = $("aAd").value.trim().toLocaleUpperCase("tr-TR"); });
+    $("aKod").oninput = () => {
+      kodTouched = true;
+      if ($("aSabit").checked) $("aBarkod").value = sabitBarkod(trzKod($("aKod").value));
+      updateClInfo();
+    };
+    $("aSabit").onchange = applySabit;
+    $("aAd").addEventListener("input", () => { if (!clAdTouched) $("aClAd").value = clAdi($("aAd").value); });
     $("aClAd").oninput = () => { clAdTouched = true; };
     $("aClPlu").oninput = () => checkClPlu(false);
     $("aClOneri").onclick = () => { $("aClPlu").value = $("aClOneri").dataset.plu; checkClPlu(false); };
