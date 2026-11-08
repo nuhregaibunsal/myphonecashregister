@@ -7,11 +7,12 @@
 - [ ] Ürün eklerken özel kodlar (Tür, üretim yeri, kayıt no; gelişmiş: Sınıf, Grup, 4-ÖK, 5-ÖK, Marka, Renk). Eklenen ürün StokEx'te kontrol edilecek.
 - [ ] Wireshark: CL'den 24 numaralı içeriği yalnız 192.168.1.153'e gönderirken yakala (filtre host 192.168.1.153). İçeriklerin paket terazilerine otomatik gönderimi için.
 
+- [ ] Fiyat sorgu (Hesap → 🔎 Fiyat Sorgu): kamera açık kalır, okutulan ürünün adı ve fiyatı büyük çıkar, kart 5 sn sonra ya da Kapat ile kapanır, açıkken yeni barkod okunursa yeni ürün gelir. Düzenle → Fiyat sekmesinde o ürün açılır.
+- [ ] Birim ekleme (Fiyat → ürün → ＋ Birim ekle): birim adı, ağırlık, barkod, fiyat (ağırlığa göre hesaplanır). Ürünün var olan ek biriminden (yoksa ana biriminden) kopyalanır. TEST ürününde dene, Vega'da yeni birimin barkod standardı ve diğer alanları kontrol edilecek.
+- [ ] Ürün eklerken içerik no seçimi (Ekle → Terazi → İçerik no kutusuna dokununca içerik listesi, altında seçilen içeriğin özeti).
+
 ### Yapılacak
 - [ ] İçeriklerin paket terazilerine (192.168.1.153, 192.168.1.204) otomatik gönderimi (Wireshark yakalamasından sonra, tahmin et → doğrula).
-- [ ] Ürün eklerken içerik no seçimi İçerik listesinden (kod + içindekiler özeti).
-- [ ] Fiyat sorgu sayfası: kamera sürekli açık, okutulan ürünün adı ve fiyatı büyük yazılır. "Düzenle" ile fiyat değiştirme paneli açılır; panel elle ya da 5 saniye sonra kendiliğinden kapanır, açıkken yeni barkod okunursa yeni ürün gelir.
-- [ ] Var olan ürünlere telefondan yeni birim ekleme (örnek: KG ürününe 250 gr / 500 gr paket birimi, ağırlık ve barkodla). Vega'nın birim ekleme şekli incelenecek.
 - [ ] Telefondan stok girişi (mal kabul): ürünü okutup gelen miktarı Vega'ya işleme. Vega'nın stok girişini nasıl kaydettiği incelenecek.
 
 ### Dükkan sahibi elle yapacak

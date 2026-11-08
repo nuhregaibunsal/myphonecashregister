@@ -32,10 +32,23 @@
       <div class="focusdot" id="focusDot" hidden></div>
       <div class="caminfo" id="camInfo"></div>
     </div>
+    <div class="sorgu" id="sorguKart" hidden>
+      <div class="sorgu-ad" id="sorguAd"></div>
+      <div class="sorgu-fiyat" id="sorguFiyat"></div>
+      <div class="sorgu-alt" id="sorguAlt"></div>
+      <div class="row">
+        <button class="btn" id="sorguKapat" type="button">Kapat</button>
+        <button class="btn primary" id="sorguDuzenle" type="button">✏️ Düzenle</button>
+      </div>
+      <div class="sorgu-sure" id="sorguSure"></div>
+    </div>
 
   <section id="tab-hesap" class="tab active">
     <div class="row">
       <button class="btn primary big" id="startScan" type="button">📷 Barkod Okut</button>
+    </div>
+    <div class="row">
+      <button class="btn big" id="startSorgu" type="button">🔎 Fiyat Sorgu</button>
     </div>
 
     <form class="row" id="manualForm" autocomplete="off">
@@ -90,6 +103,18 @@
         <button class="btn" id="fCancel" type="button">Vazgeç</button>
         <button class="btn primary" id="fSave" type="button">Kasaya kaydet</button>
       </div>
+      <details id="fBirimBox" hidden>
+        <summary>＋ Birim ekle</summary>
+        <div class="grid">
+          <label>Birim adı<select id="bBirim"></select></label>
+          <label>Ağırlık (kg)<input id="bAgirlik" inputmode="decimal" placeholder="0,5" autocomplete="off"></label>
+          <label>Barkod<input id="bBarkod" inputmode="numeric" autocomplete="off"></label>
+          <label>Satış fiyatı<input id="bFiyat" inputmode="decimal" autocomplete="off"></label>
+        </div>
+        <p class="muted small">Fiyat ağırlığa göre ana birimden hesaplanır, istersen değiştir. PIN yukarıdaki kutudan alınır.</p>
+        <button class="btn primary" id="bEkle" type="button">Birimi ekle</button>
+        <p class="msg" id="bMsg"></p>
+      </details>
       <details id="fOzelBox" hidden>
         <summary>Özel kodlar</summary>
         <div class="grid">
@@ -151,9 +176,11 @@
         <div class="grid">
           <label>PLU no<input id="aClPlu" inputmode="numeric"></label>
           <label>Tip<select id="aClTip"><option value="1">1. Ağırlık</option><option value="2">2. Adet</option></select></label>
-          <label>İçerik no<input id="aClIcerik" inputmode="numeric" value="0"></label>
+          <label>İçerik no<input id="aClIcerik" inputmode="numeric" value="0" list="dlIcerik" autocomplete="off"></label>
           <label>Son kullanma (gün)<input id="aClSkt" inputmode="numeric" value="366"></label>
         </div>
+        <datalist id="dlIcerik"></datalist>
+        <p class="muted small" id="aClIcerikInfo"></p>
         <p class="msg" id="aClPluMsg"></p>
         <button class="btn" id="aClOneri" type="button" hidden></button>
         <p class="muted small" id="aClInfo"></p>

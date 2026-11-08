@@ -186,6 +186,7 @@
     $("fTerazi").hidden = true;
     $("fEtiketBox").hidden = true;
     $("fOzelBox").hidden = true;
+    $("fBirimBox").hidden = true;
     $("fEtiketSon").hidden = true;
     fMsg("");
     try {
@@ -218,6 +219,7 @@
       }
       $("fSave").disabled = false;
       fillEtiketUnits();
+      birimFormKur();
       loadOzel(j.stok, p);
       const tk = trzKod(j.kod);
       if (tk) showTerazi(p, tk);
@@ -226,6 +228,64 @@
       $("fInfo").textContent = "";
       fMsg("Ürünün birimleri okunamadı: " + e.message, "err");
     }
+  }
+
+  function bMsg(text, kind) { $("bMsg").textContent = text || ""; $("bMsg").className = "msg " + (kind || ""); }
+
+  function birimFormKur() {
+    const sel = $("bBirim");
+    sel.innerHTML = "";
+    ((lists && lists.birim) || ["ADET", "KG", "PAKET"]).forEach(b => {
+      const o = document.createElement("option");
+      o.value = b; o.textContent = b;
+      sel.appendChild(o);
+    });
+    if ([...sel.options].some(o => o.value === "PAKET")) sel.value = "PAKET";
+    $("bAgirlik").value = ""; $("bBarkod").value = ""; $("bFiyat").value = "";
+    delete $("bFiyat").dataset.touched;
+    bMsg("");
+    $("fBirimBox").hidden = !unitData;
+  }
+
+  function birimFiyatHesapla() {
+    if (!unitData || $("bFiyat").dataset.touched) return;
+    const main = unitData.birimler[0];
+    const ag = parseFloat(String($("bAgirlik").value).replace(",", "."));
+    $("bFiyat").value = ag > 0 ? String(round2(main.fiyat / unitFactor(main) * ag)).replace(".", ",") : "";
+  }
+
+  async function birimEkle() {
+    if (!unitData || !priceSel) return;
+    const num = v => parseFloat(String(v).replace(/\./g, "").replace(",", "."));
+    const pin = String($("fPin").value).trim();
+    const birim = $("bBirim").value;
+    const agirlik = parseFloat(String($("bAgirlik").value).replace(",", ".")) || 0;
+    const barkod = Scale.normCode($("bBarkod").value);
+    const fiyat = num($("bFiyat").value);
+    if (!birim) { bMsg("Birim adını seç.", "err"); return; }
+    if (!barkod) { bMsg("Barkodu yaz.", "err"); return; }
+    if (byBarcode.get(barkod)) { bMsg("Bu barkod zaten kayıtlı: " + byBarcode.get(barkod).ad, "err"); return; }
+    if (!(fiyat > 0)) { bMsg("Satış fiyatını yaz.", "err"); return; }
+    if (!/^\d{4,8}$/.test(pin)) { bMsg("Yukarıya PIN yaz (4-8 rakam).", "err"); return; }
+    $("bEkle").disabled = true;
+    bMsg("Ekleniyor…");
+    try {
+      const res = await fetch("api/birim", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ stok: unitData.stok, birim, agirlik, barkod, fiyat: round2(fiyat), pin }) });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok && j.ok) {
+        pinCache = pin; pinAt = Date.now();
+        const p = priceSel;
+        await syncLive();
+        await selectForPrice(p);
+        fMsg(birim + (agirlik > 0 ? " " + kgFmt(agirlik) + " kg" : "") + " birimi eklendi (" + barkod + ", " + tl(round2(fiyat)) + ").", "ok");
+      } else {
+        if (res.status === 401) { pinCache = ""; $("fPin").value = ""; }
+        bMsg(j.error || ("Eklenemedi (" + res.status + ")"), "err");
+      }
+    } catch (e) {
+      bMsg("Kasa bilgisayarına ulaşılamadı.", "err");
+    }
+    $("bEkle").disabled = false;
   }
 
   let eCanvas = null, eVeri = null;
@@ -584,6 +644,30 @@
     $("iKaydet").disabled = false;
   }
 
+  async function icerikListesiDoldur() {
+    if (!icerikler) await loadIcerikler();
+    const dl = $("dlIcerik");
+    if (!icerikler || dl.childElementCount === icerikler.length + 1) return;
+    dl.innerHTML = "";
+    const z = document.createElement("option");
+    z.value = "0"; z.label = "İçerik yok";
+    dl.appendChild(z);
+    icerikler.slice().sort((a, b) => b.kod - a.kod).forEach(x => {
+      const o = document.createElement("option");
+      o.value = String(x.kod);
+      o.label = icerikOzet(x.metin);
+      o.textContent = icerikOzet(x.metin);
+      dl.appendChild(o);
+    });
+    icerikSecimGoster();
+  }
+
+  function icerikSecimGoster() {
+    const v = $("aClIcerik").value.trim();
+    const x = icerikler && /^\d+$/.test(v) && Number(v) > 0 ? icerikler.find(i => String(i.kod) === v) : null;
+    $("aClIcerikInfo").textContent = Number(v) > 0 ? (x ? "İçerik " + v + ": " + icerikOzet(x.metin) : (icerikler ? "Bu kodda içerik yok." : "")) : "";
+  }
+
   const kodNorm = v => String(v || "").toLocaleUpperCase("tr-TR").replace(/[^0-9A-ZÇĞİÖŞÜ]/g, "").replace(/^([A-ZÇĞİÖŞÜ]*)0+(?=\d)/, "$1");
 
   function findByKod(q) {
@@ -828,6 +912,7 @@
     $("aClPlu").value = "";
     $("aClTip").value = "1";
     $("aClIcerik").value = "0";
+    $("aClIcerikInfo").textContent = "";
     $("aClSkt").value = "366";
     $("aClPluMsg").textContent = "";
     $("aClOneri").hidden = true;
@@ -968,6 +1053,59 @@
     kodTouched = false;
     checkBarcode();
     $("aAd").focus();
+  }
+
+  let sorguTimer = null, sorguUrun = null;
+
+  function sorguKapat() {
+    clearTimeout(sorguTimer);
+    $("sorguKart").hidden = true;
+    sorguUrun = null;
+  }
+
+  function sorguGoster(code) {
+    clearTimeout(sorguTimer);
+    const r = lookup(code);
+    const k = $("sorguKart");
+    k.hidden = false;
+    k.classList.toggle("yok", !(r && r.product));
+    if (!r || !r.product) {
+      beep(false);
+      sorguUrun = null;
+      $("sorguAd").textContent = r && r.scale ? "Terazi etiketi, ürün bulunamadı" : "Ürün bulunamadı";
+      $("sorguFiyat").textContent = "—";
+      $("sorguAlt").textContent = code;
+      $("sorguDuzenle").hidden = true;
+    } else {
+      beep(true);
+      const p = r.product;
+      sorguUrun = p;
+      $("sorguAd").textContent = p.ad;
+      $("sorguFiyat").textContent = tl(p.fiyat);
+      let alt = p.birim ? lower(p.birim) + " fiyatı" : "";
+      if (r.scale) {
+        let kg, amount;
+        if (r.scale.valType === "price") { amount = r.scale.amount; kg = p.fiyat ? amount / p.fiyat : 0; }
+        else { kg = r.scale.kg; amount = kg * p.fiyat; }
+        alt = "Bu etiket: " + kgFmt(kg) + " kg = " + tl(amount);
+      }
+      $("sorguAlt").textContent = alt;
+      $("sorguDuzenle").hidden = !(canEditPrice && p.birimind);
+    }
+    const bar = $("sorguSure");
+    bar.style.animation = "none";
+    void bar.offsetWidth;
+    bar.style.animation = "";
+    sorguTimer = setTimeout(sorguKapat, 5000);
+  }
+
+  function sorguDuzenle() {
+    const p = sorguUrun;
+    if (!p) return;
+    sorguKapat();
+    stopScan();
+    switchTab("fiyat");
+    selectForPrice(p);
   }
 
   function handlePriceScan(code) {
@@ -1244,6 +1382,7 @@
     if (busy || $("priceDialog").open || $("qtyDialog").open) { if (code === lastCode) lastSeen = now; return; }
     if (now - lastTime < 600) return;
     lastCode = code; lastTime = now; lastSeen = now;
+    if (scanMode === "sorgu") { sorguGoster(code); return; }
     if (scanMode === "fiyat") { handlePriceScan(code); return; }
     if (scanMode === "ekle") { handleAddScan(code); return; }
     const snap = Scale.parseScale(code, settings) ? snapshot(corners) : null;
@@ -1282,7 +1421,9 @@
       return;
     }
     $("scanner").hidden = false;
+    $("scanner").classList.toggle("kisa", scanMode === "sorgu");
     scanning = true;
+    lastCode = "";
     try {
       let s = await navigator.mediaDevices.getUserMedia(videoConstraints(null));
       backCams = await listBackCams();
@@ -1426,6 +1567,7 @@
   }
 
   function stopScan() {
+    if (scanMode === "sorgu") sorguKapat();
     scanning = false;
     stopDecoder();
     torchOn = false; zoomOn = false;
@@ -1668,6 +1810,9 @@
   function bind() {
     document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => switchTab(b.dataset.tab));
     $("startScan").onclick = () => { scanMode = "hesap"; startScan(); };
+    $("startSorgu").onclick = () => { scanMode = "sorgu"; startScan(); window.scrollTo(0, 0); };
+    $("sorguKapat").onclick = sorguKapat;
+    $("sorguDuzenle").onclick = sorguDuzenle;
     $("fScan").onclick = () => { scanMode = "fiyat"; fMsg(""); startScan(); };
     $("fForm").onsubmit = e => { e.preventDefault(); priceFind($("fSearch").value); };
     $("fSearch").oninput = renderPriceSuggest;
@@ -1699,6 +1844,11 @@
     kayitBagla("a");
     kayitBagla("f");
     $("fOkKaydet").onclick = saveOzel;
+    $("bAgirlik").oninput = birimFiyatHesapla;
+    $("bFiyat").oninput = () => { $("bFiyat").dataset.touched = "1"; };
+    $("bEkle").onclick = birimEkle;
+    $("aClIcerik").addEventListener("focus", icerikListesiDoldur);
+    $("aClIcerik").addEventListener("input", icerikSecimGoster);
     $("aAd").addEventListener("input", () => { if (!clAdTouched) $("aClAd").value = clAdi($("aAd").value); });
     $("aClAd").oninput = () => { clAdTouched = true; };
     $("aClPlu").oninput = () => checkClPlu(false);

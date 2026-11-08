@@ -413,6 +413,79 @@ function Set-Icerik($ctx) {
     SendJson $ctx 200 @{ ok = $true; kod = $kod; yeni = [bool]($res -like "OK icerik-eklendi*") }
 }
 
+function Add-Unit($ctx) {
+    $b = Read-JsonBody $ctx
+    $pinState = Test-Pin ([string]$b["pin"])
+    if ($pinState -eq "kapali") { SendJson $ctx 403 @{ ok = $false; error = "Degistirme kapali. Kurulumda PIN belirlenmedi." }; return }
+    if ($pinState -eq "kilitli") { SendJson $ctx 423 @{ ok = $false; error = "Cok fazla yanlis PIN. 5 dakika bekleyin." }; return }
+    if ($pinState -ne "ok") { SendJson $ctx 401 @{ ok = $false; error = "PIN yanlis." }; return }
+    $stok = [int]$b["stok"]
+    $birim = ([string]$b["birim"]).Trim().ToUpperInvariant()
+    $barkod = ([string]$b["barkod"]).Trim()
+    $agirlik = [decimal]$b["agirlik"]
+    $fiyat = [decimal]$b["fiyat"]
+    if ($stok -le 0 -or -not $birim -or $birim.Length -gt 30) { SendJson $ctx 400 @{ ok = $false; error = "Birim adi gecersiz." }; return }
+    if (-not $barkod -or $barkod.Length -gt 50) { SendJson $ctx 400 @{ ok = $false; error = "Barkod bos ya da cok uzun." }; return }
+    if ($agirlik -lt 0 -or $agirlik -gt 1000) { SendJson $ctx 400 @{ ok = $false; error = "Agirlik gecersiz." }; return }
+    if ($fiyat -le 0 -or $fiyat -ge 1000000) { SendJson $ctx 400 @{ ok = $false; error = "Fiyat gecersiz." }; return }
+    $conn = New-Object System.Data.SqlClient.SqlConnection($connStr)
+    $sonuc = 0; $neden = ""; $adOut = ""
+    try {
+        $conn.Open()
+        $cc = $conn.CreateCommand()
+        $cc.CommandText = "SELECT c.name FROM sys.columns c JOIN sys.types t ON t.user_type_id = c.user_type_id WHERE c.object_id = OBJECT_ID('dbo.F0101TBLBIRIMLEREX') AND c.is_identity = 0 AND c.is_computed = 0 AND t.name NOT IN ('timestamp', 'rowversion') ORDER BY c.column_id"
+        $cr = $cc.ExecuteReader()
+        $cols = New-Object System.Collections.Generic.List[string]
+        while ($cr.Read()) { [void]$cols.Add([string]$cr[0]) }
+        $cr.Close()
+        $over = @{
+            BIRIMADI = "@birim"; AGIRLIK = "@agirlik"; BARCODE = "@barkod"
+            BARCODESTD = "CASE WHEN LEN(@barkod) = 13 AND @barkod NOT LIKE '%[^0-9]%' THEN 1 WHEN t.IND = @ana AND t.BARCODESTD = 5 THEN 0 ELSE t.BARCODESTD END"
+            VARSAYILAN = "0"; ANABIRIM = "0"; SATISFIYATI1 = "@fiyat"; SATISFIYATI2 = "0"; SATISFIYATI3 = "0"
+            ESKIFIYAT1 = "0"; ESKIFIYAT2 = "0"; ESKIFIYAT3 = "0"; FIYATDEGISMETARIHI1 = "GETDATE()"
+        }
+        $sel = ($cols | ForEach-Object { if ($over.ContainsKey($_)) { $over[$_] } else { "t.[" + $_ + "]" } }) -join ", "
+        $ins = ($cols | ForEach-Object { "[" + $_ + "]" }) -join ", "
+        $sql = @"
+SET XACT_ABORT ON;
+BEGIN TRAN;
+DECLARE @ana int = (SELECT ANABIRIM FROM dbo.F0101TBLSTOKLAR WHERE IND = @s);
+IF @ana IS NULL BEGIN ROLLBACK; SELECT -1 AS sonuc, N'stok' AS neden, N'' AS ad; RETURN; END;
+DECLARE @var nvarchar(200) = (SELECT TOP 1 s.MALINCINSI FROM dbo.F0101TBLBIRIMLEREX b WITH (UPDLOCK, HOLDLOCK) JOIN dbo.F0101TBLSTOKLAR s ON s.IND = b.STOKNO WHERE b.BARCODE = @barkod);
+IF @var IS NOT NULL BEGIN ROLLBACK; SELECT -1 AS sonuc, N'barkod' AS neden, @var AS ad; RETURN; END;
+DECLARE @tpl int = (SELECT TOP 1 IND FROM dbo.F0101TBLBIRIMLEREX WHERE STOKNO = @s AND IND <> @ana ORDER BY IND DESC);
+IF @tpl IS NULL SET @tpl = @ana;
+INSERT INTO dbo.F0101TBLBIRIMLEREX ($ins) SELECT $sel FROM dbo.F0101TBLBIRIMLEREX t WHERE t.IND = @tpl AND t.STOKNO = @s;
+IF @@ROWCOUNT <> 1 BEGIN ROLLBACK; SELECT -1 AS sonuc, N'sablon' AS neden, N'' AS ad; RETURN; END;
+DECLARE @yeni int = SCOPE_IDENTITY();
+COMMIT;
+SELECT @yeni AS sonuc, N'' AS neden, N'' AS ad;
+"@
+        $cmd = $conn.CreateCommand()
+        $cmd.CommandText = $sql
+        [void]$cmd.Parameters.AddWithValue("@s", $stok)
+        [void]$cmd.Parameters.AddWithValue("@birim", $birim)
+        [void]$cmd.Parameters.AddWithValue("@barkod", $barkod)
+        [void]$cmd.Parameters.AddWithValue("@agirlik", $agirlik)
+        [void]$cmd.Parameters.AddWithValue("@fiyat", $fiyat)
+        $r = $cmd.ExecuteReader()
+        if ($r.Read()) { $sonuc = [int]$r["sonuc"]; $neden = [string]$r["neden"]; $adOut = [string]$r["ad"] }
+        $r.Close()
+    } finally { $conn.Close() }
+    if ($sonuc -le 0) {
+        $msg = "Birim eklenemedi."
+        if ($neden -eq "barkod") { $msg = "Bu barkod zaten kayitli: $adOut" }
+        elseif ($neden -eq "stok") { $msg = "Urun bulunamadi." }
+        SendJson $ctx 409 @{ ok = $false; error = [string]$msg }
+        return
+    }
+    $script:cache = $null
+    $ip = [string]$ctx.Request.RemoteEndPoint.Address
+    Add-Content -Path $changeLog -Value ("{0:yyyy-MM-dd HH:mm:ss};BIRIM;{1};{2};{3};{4};{5};{6}" -f (Get-Date), $stok, $birim, $agirlik, $barkod, $fiyat, $ip) -Encoding UTF8
+    Log "Birim eklendi: stok $stok, $birim $agirlik kg, $barkod, $fiyat ($ip)"
+    SendJson $ctx 200 @{ ok = $true; ind = [int]$sonuc }
+}
+
 function Get-LabelData([int]$ind) {
     $conn = New-Object System.Data.SqlClient.SqlConnection($connStr)
     try {
@@ -832,6 +905,14 @@ function Handle($ctx) {
         try { Send $ctx 200 "application/json; charset=utf-8" (Get-CLList) $true } catch {
             Log "CL listesi okunamadi: $($_.Exception.Message)"
             SendJson $ctx 503 @{ ok = $false; error = [string]$_.Exception.Message }
+        }
+        return
+    }
+    if ($path -eq "/api/birim") {
+        if ($ctx.Request.HttpMethod -ne "POST") { SendJson $ctx 405 @{ ok = $false; error = "POST gerekli" }; return }
+        try { Add-Unit $ctx } catch {
+            Log "Birim eklenemedi: $($_.Exception.Message)"
+            SendJson $ctx 500 @{ ok = $false; error = "Birim eklenemedi: $($_.Exception.Message)" }
         }
         return
     }
