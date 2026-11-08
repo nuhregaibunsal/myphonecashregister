@@ -16,10 +16,11 @@ if ($env:FG_MDB -and (Test-Path -LiteralPath $env:FG_MDB)) {
 } else {
     $roots = @("C:\", ${env:ProgramFiles(x86)}, $env:ProgramFiles, $env:ProgramData, "$env:USERPROFILE\Documents", "$env:PUBLIC\Documents", "$env:USERPROFILE\Desktop") | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
     $dirs = foreach ($r in $roots) { Get-ChildItem -LiteralPath $r -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '(?i)cl.?works|cas|cl.?5000|clp|terazi|scale|label|etiket' } }
-    $files = @(foreach ($d in ($dirs | Select-Object -Unique)) { Get-ChildItem -LiteralPath $d.FullName -Recurse -File -Include *.mdb, *.accdb -ErrorAction SilentlyContinue })
+    $isDb = { $_.Extension -match '(?i)^\.(mdb|accdb)$' }
+    $files = @(foreach ($d in ($dirs | Select-Object -Unique)) { Get-ChildItem -LiteralPath $d.FullName -Recurse -File -ErrorAction SilentlyContinue | Where-Object $isDb })
     if (-not $files.Count) {
         Say "Bilinen klasorlerde bulunamadi, tum C: diski taraniyor (birkac dakika surebilir)..." Yellow
-        $files = @(Get-ChildItem -LiteralPath "C:\" -Recurse -Depth 5 -File -Include *.mdb, *.accdb -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notmatch '(?i)\\Windows\\|\\Microsoft Office\\|\\WinSxS\\' })
+        $files = @(Get-ChildItem -LiteralPath "C:\" -Recurse -Depth 5 -File -ErrorAction SilentlyContinue | Where-Object $isDb | Where-Object { $_.FullName -notmatch '(?i)\\Windows\\|\\Microsoft Office\\|\\WinSxS\\' })
     }
 }
 if (-not $files.Count) {
