@@ -62,19 +62,22 @@ function Get-ProductsJson {
         $cmd.CommandText = $query
         $cmd.CommandTimeout = 60
         $r = $cmd.ExecuteReader()
+        $has = @{}
+        for ($ci = 0; $ci -lt $r.FieldCount; $ci++) { $has[$r.GetName($ci)] = $true }
+        $col = { param($name) if ($has.ContainsKey($name) -and -not ($r[$name] -is [DBNull])) { [string]$r[$name] } else { "" } }
         while ($r.Read()) {
             $fiyat = [double]0
-            if (-not ($r["fiyat"] -is [DBNull])) { $fiyat = [double]$r["fiyat"] }
-            $bi = [int]0
-            if (-not ($r["birimind"] -is [DBNull])) { $bi = [int]$r["birimind"] }
+            if ($has.ContainsKey("fiyat") -and -not ($r["fiyat"] -is [DBNull])) { $fiyat = [double]$r["fiyat"] }
+            $bi = 0
+            if ($has.ContainsKey("birimind") -and -not ($r["birimind"] -is [DBNull])) { $bi = [int]$r["birimind"] }
             if ($count -gt 0) { [void]$sb.Append(',') }
-            [void]$sb.Append('{"barkod":').Append([System.Web.HttpUtility]::JavaScriptStringEncode([string]$r["barkod"], $true))
-            [void]$sb.Append(',"ad":').Append([System.Web.HttpUtility]::JavaScriptStringEncode([string]$r["ad"], $true))
+            [void]$sb.Append('{"barkod":').Append([System.Web.HttpUtility]::JavaScriptStringEncode((& $col "barkod"), $true))
+            [void]$sb.Append(',"ad":').Append([System.Web.HttpUtility]::JavaScriptStringEncode((& $col "ad"), $true))
             [void]$sb.Append(',"fiyat":').Append($fiyat.ToString($inv))
-            [void]$sb.Append(',"birim":').Append([System.Web.HttpUtility]::JavaScriptStringEncode([string]$r["birim"], $true))
-            [void]$sb.Append(',"plu":').Append([System.Web.HttpUtility]::JavaScriptStringEncode([string]$r["plu"], $true))
+            [void]$sb.Append(',"birim":').Append([System.Web.HttpUtility]::JavaScriptStringEncode((& $col "birim"), $true))
+            [void]$sb.Append(',"plu":').Append([System.Web.HttpUtility]::JavaScriptStringEncode((& $col "plu"), $true))
             [void]$sb.Append(',"birimind":').Append($bi.ToString($inv))
-            [void]$sb.Append(',"kod":').Append([System.Web.HttpUtility]::JavaScriptStringEncode([string]$r["kod"], $true)).Append('}')
+            [void]$sb.Append(',"kod":').Append([System.Web.HttpUtility]::JavaScriptStringEncode((& $col "kod"), $true)).Append('}')
             $count++
         }
         $r.Close()
