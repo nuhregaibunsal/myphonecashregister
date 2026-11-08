@@ -29,8 +29,7 @@ try {
     Say "`nTablolar:" Yellow
     Say ("  " + ($names -join ", ")) White
 
-    $hedef = @($names | Where-Object { $_ -match '(?i)ingr|icer|text|msg|nutri|allerg' })
-    $hedef += @($names | Where-Object { $_ -match '(?i)^TbScale$' })
+    $hedef = @($names | Where-Object { $_ -cmatch 'Ingredient|LabelCaption|Property' })
     foreach ($t in $hedef) {
         Say "`n=== $t ===" Yellow
         $cmd = $conn.CreateCommand()
@@ -41,7 +40,8 @@ try {
         $n = 0
         while ($r.Read()) {
             $n++
-            if ($n -le 4 -or ($t -match '(?i)scale')) {
+            $ilk = [string]$r.GetValue(0)
+            if ($n -le 4 -or $ilk -eq "24" -or $ilk -eq "1") {
                 $vals = @(); for ($i = 0; $i -lt $r.FieldCount; $i++) {
                     $v = $r.GetValue($i)
                     if ($v -is [byte[]]) { $s = "[{0} bayt]" -f $v.Length } else { $s = [string]$v }
