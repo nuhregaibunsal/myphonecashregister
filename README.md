@@ -78,7 +78,7 @@ Kurulum `C:\FiyatGor` klasörüne yapılır. Sunucu Windows oturumu açılınca 
 
 ### Telefondan fiyat değiştirme
 
-Kurulum sırasında 4-8 haneli bir PIN belirlenirse, canlı bağlantıda okutulan ürünün altında ve Ürünler listesinde fiyat değiştirme düğmesi çıkar. Yeni fiyat Vega'nın yaptığı gibi yazılır: `F0101TBLBIRIMLEREX` tablosunda eski fiyat `ESKIFIYAT1` sütununa alınır, yeni fiyat `SATISFIYATI1` sütununa yazılır, değişiklik zamanı `FIYATDEGISMETARIHI1` sütununa işlenir.
+Kurulum sırasında 4-8 haneli bir PIN belirlenirse, canlı bağlantıda alt menüde **Fiyat** sekmesi çıkar. Ürün orada okutulur ya da aranır, yeni fiyat ve PIN yazılıp kaydedilir. Yeni fiyat Vega'nın yaptığı gibi yazılır: `F0101TBLBIRIMLEREX` tablosunda eski fiyat `ESKIFIYAT1` sütununa alınır, yeni fiyat `SATISFIYATI1` sütununa yazılır, değişiklik zamanı `FIYATDEGISMETARIHI1` sütununa işlenir.
 
 - 5 yanlış PIN denemesinden sonra 5 dakika kilitlenir.
 - Fiyat bu arada başka yerden değiştiyse üzerine yazılmaz.

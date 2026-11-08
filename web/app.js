@@ -113,60 +113,126 @@
     } catch (e) { canEditPrice = false; }
   }
 
-  function findProduct(birimind) { return products.find(p => p.birimind === birimind) || null; }
+  let priceSel = null;
+  const priceLog = [];
 
-  function openPriceEdit(p) {
-    const dlg = $("editDialog");
-    busy = true;
-    $("eTitle").textContent = p.ad;
-    $("eOld").textContent = "Şu anki fiyat: " + tl(p.fiyat) + (p.birim ? " / " + lower(p.birim) : "");
-    $("eNew").value = "";
-    $("ePin").value = pinCache && Date.now() - pinAt < 10 * 60000 ? pinCache : "";
-    $("eMsg").textContent = "";
-    $("eSave").disabled = false;
-    const close = () => dlg.close();
-    dlg.onclose = () => { busy = false; };
-    $("eCancel").onclick = close;
-    $("eSave").onclick = async () => {
-      const yeni = parseFloat(String($("eNew").value).replace(/\./g, "").replace(",", "."));
-      const pin = String($("ePin").value).trim();
-      if (!(yeni > 0)) { $("eMsg").textContent = "Yeni fiyatı yaz."; return; }
-      if (!/^\d{4,8}$/.test(pin)) { $("eMsg").textContent = "PIN 4-8 rakam olmalı."; return; }
-      $("eSave").disabled = true;
-      $("eMsg").textContent = "Kaydediliyor…";
-      try {
-        const res = await fetch("api/fiyat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ birimind: p.birimind, eski: p.fiyat, yeni, pin, ad: p.ad })
-        });
-        const j = await res.json().catch(() => ({}));
-        if (res.ok && j.ok) {
-          pinCache = pin; pinAt = Date.now();
-          const eski = p.fiyat;
-          p.fiyat = round2(yeni);
-          close();
-          flash(p.ad + ": " + tl(eski) + " → " + tl(p.fiyat) + " olarak kasaya kaydedildi", "ok");
-          await saveProducts();
-          syncLive();
-          if ($("tab-urunler").classList.contains("active")) renderList();
-          return;
-        }
-        if (res.status === 401) { pinCache = ""; $("ePin").value = ""; }
-        if (res.status === 409) syncLive();
-        $("eMsg").textContent = j.error || ("Kaydedilemedi (" + res.status + ")");
-      } catch (e) {
-        $("eMsg").textContent = "Kasa bilgisayarına ulaşılamadı.";
+  function updatePriceTab() {
+    $("tabFiyatBtn").hidden = !canEditPrice;
+  }
+
+  function fMsg(text, kind) {
+    $("fMsg").textContent = text || "";
+    $("fMsg").className = "msg " + (kind || "");
+  }
+
+  function selectForPrice(p) {
+    priceSel = p;
+    $("fCard").hidden = false;
+    $("fName").textContent = p.ad;
+    $("fInfo").textContent = [p.barkod, p.birim ? lower(p.birim) : ""].filter(Boolean).join(" · ");
+    $("fOld").textContent = tl(p.fiyat);
+    $("fNew").value = "";
+    $("fPin").value = pinCache && Date.now() - pinAt < 10 * 60000 ? pinCache : "";
+    $("fSave").disabled = false;
+    $("fSuggest").innerHTML = "";
+    $("fSearch").value = "";
+    fMsg("");
+    setTimeout(() => $("fNew").focus(), 50);
+  }
+
+  function clearPriceSel() {
+    priceSel = null;
+    $("fCard").hidden = true;
+  }
+
+  function renderPriceLog() {
+    $("fLogCard").hidden = !priceLog.length;
+    const ul = $("fLog");
+    ul.innerHTML = "";
+    priceLog.forEach(x => {
+      const li = document.createElement("li");
+      li.innerHTML = '<div class="info"><b></b><span class="muted small"></span></div><strong></strong>';
+      li.querySelector("b").textContent = x.ad;
+      li.querySelector("span").textContent = x.at.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }) + " · eski " + tl(x.eski);
+      li.querySelector("strong").textContent = tl(x.yeni);
+      ul.appendChild(li);
+    });
+  }
+
+  async function savePrice() {
+    const p = priceSel;
+    if (!p) return;
+    const yeni = parseFloat(String($("fNew").value).replace(/\./g, "").replace(",", "."));
+    const pin = String($("fPin").value).trim();
+    if (!(yeni > 0)) { fMsg("Yeni fiyatı yaz.", "err"); return; }
+    if (!/^\d{4,8}$/.test(pin)) { fMsg("PIN 4-8 rakam olmalı.", "err"); return; }
+    $("fSave").disabled = true;
+    fMsg("Kaydediliyor…");
+    try {
+      const res = await fetch("api/fiyat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ birimind: p.birimind, eski: p.fiyat, yeni, pin, ad: p.ad })
+      });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok && j.ok) {
+        pinCache = pin; pinAt = Date.now();
+        const eski = p.fiyat;
+        p.fiyat = round2(yeni);
+        priceLog.unshift({ ad: p.ad, eski, yeni: p.fiyat, at: new Date() });
+        renderPriceLog();
+        clearPriceSel();
+        fMsg(p.ad + ": " + tl(eski) + " → " + tl(p.fiyat) + " kasaya kaydedildi", "ok");
+        await saveProducts();
+        syncLive();
+        return;
       }
-      $("eSave").disabled = false;
-    };
-    dlg.showModal();
-    setTimeout(() => $("eNew").focus(), 50);
+      if (res.status === 401) { pinCache = ""; $("fPin").value = ""; }
+      if (res.status === 409) syncLive();
+      fMsg(j.error || ("Kaydedilemedi (" + res.status + ")"), "err");
+    } catch (e) {
+      fMsg("Kasa bilgisayarına ulaşılamadı.", "err");
+    }
+    $("fSave").disabled = false;
+  }
+
+  function priceFind(q) {
+    q = String(q || "").trim();
+    if (!q) return;
+    if (/^\d+$/.test(q)) {
+      const r = lookup(q);
+      if (r && r.product && !r.scale) { selectForPrice(r.product); return; }
+      fMsg(r && r.scale ? "Bu bir terazi etiketi. Ürünü isimle arayın." : "Bulunamadı: " + q, "err");
+      return;
+    }
+    const res = search(q, 2).filter(p => p.birimind);
+    if (res.length === 1) selectForPrice(res[0]);
+  }
+
+  function renderPriceSuggest() {
+    const q = $("fSearch").value.trim();
+    const ul = $("fSuggest");
+    ul.innerHTML = "";
+    if (q.length < 2 || /^\d{6,}$/.test(q)) return;
+    search(q, 30).filter(p => p.birimind).slice(0, 8).forEach(p => ul.appendChild(productLi(p, selectForPrice)));
+  }
+
+  function handlePriceScan(code) {
+    const r = lookup(code);
+    if (r && r.product && !r.scale) {
+      beep(true);
+      stopScan();
+      selectForPrice(r.product);
+      return;
+    }
+    beep(false);
+    fMsg(r && r.scale ? "Bu bir terazi etiketi. Ürünü isimle arayın." : "Bulunamadı: " + code, "err");
   }
 
   async function startLive() {
     if (await syncLive()) {
       await loadRights();
+      updatePriceTab();
       renderInfo();
       liveTimer = setInterval(syncLive, 60000);
       document.addEventListener("visibilitychange", () => { if (!document.hidden) syncLive(); });
@@ -313,16 +379,10 @@
     $("lastScan").children[0].textContent = item.ad;
     $("lastScan").children[1].textContent = qty + " × " + tl(item.fiyat) + (item.birim === "KG" ? "/kg" : "") + (item.okundu ? " · etiketten okundu, kontrol et" : "");
     $("lastScan").children[2].textContent = tl(item.tutar);
-    const prod = canEditPrice && item.birimind && !item.agirlikli ? findProduct(item.birimind) : null;
-    if (prod) {
-      const b = document.createElement("button");
-      b.type = "button"; b.className = "btn sm editprice"; b.textContent = "₺ Fiyatı değiştir";
-      b.onclick = () => openPriceEdit(prod);
-      $("lastScan").appendChild(b);
-    }
   }
 
   function flash(text, kind) {
+    if ($("tab-fiyat").classList.contains("active")) { fMsg(text, kind === "ok" ? "ok" : "err"); return; }
     $("lastScan").hidden = false;
     $("lastScan").className = "last " + (kind || "");
     $("lastScan").textContent = text;
@@ -422,12 +482,15 @@
     ];
   }
 
+  let lastSeen = 0, scanMode = "hesap";
+
   function onDetected(code, corners) {
-    if (busy || $("priceDialog").open || $("qtyDialog").open) return;
     const now = Date.now();
-    if (code === lastCode && now - lastTime < 2500) return;
-    if (now - lastTime < 900) return;
-    lastCode = code; lastTime = now;
+    if (code === lastCode && now - lastSeen < 1500) { lastSeen = now; return; }
+    if (busy || $("priceDialog").open || $("qtyDialog").open) { if (code === lastCode) lastSeen = now; return; }
+    if (now - lastTime < 600) return;
+    lastCode = code; lastTime = now; lastSeen = now;
+    if (scanMode === "fiyat") { handlePriceScan(code); return; }
     const snap = Scale.parseScale(code, settings) ? snapshot(corners) : null;
     addFromCode(code, snap);
   }
@@ -518,7 +581,7 @@
     const g = c.getContext("2d", { willReadFrequently: true });
     const loop = () => {
       if (!scanning || stream !== s) return;
-      if (video.videoWidth && !busy) {
+      if (video.videoWidth) {
         const k = Math.min(1, 1280 / Math.max(video.videoWidth, video.videoHeight));
         c.width = Math.round(video.videoWidth * k);
         c.height = Math.round(video.videoHeight * k);
@@ -636,13 +699,6 @@
     li.querySelector("span").textContent = [p.barkod, p.plu ? "PLU " + p.plu : ""].filter(Boolean).join(" · ");
     li.querySelector("strong").textContent = tl(p.fiyat);
     li.onclick = () => onClick(p);
-    if (canEditPrice && p.birimind && onClick !== noop) {
-      const b = document.createElement("button");
-      b.type = "button"; b.className = "btn sm"; b.textContent = "₺✎";
-      b.title = "Fiyatı değiştir";
-      b.onclick = e => { e.stopPropagation(); openPriceEdit(p); };
-      li.appendChild(b);
-    }
     return li;
   }
 
@@ -665,7 +721,7 @@
   function switchTab(name) {
     document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.id === "tab-" + name));
     document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
-    if (name !== "hesap") stopScan();
+    stopScan();
     if (name === "urunler") renderList();
   }
 
@@ -852,7 +908,12 @@
 
   function bind() {
     document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => switchTab(b.dataset.tab));
-    $("startScan").onclick = startScan;
+    $("startScan").onclick = () => { scanMode = "hesap"; startScan(); };
+    $("fScan").onclick = () => { scanMode = "fiyat"; fMsg(""); startScan(); };
+    $("fForm").onsubmit = e => { e.preventDefault(); priceFind($("fSearch").value); };
+    $("fSearch").oninput = renderPriceSuggest;
+    $("fSave").onclick = savePrice;
+    $("fCancel").onclick = () => { clearPriceSel(); fMsg(""); };
     $("stopScan").onclick = stopScan;
     $("torch").onclick = toggleTorch;
     $("zoom").onclick = toggleZoom;
