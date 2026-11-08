@@ -1,52 +1,55 @@
-# CAS CL-Works terazi protokolü (çözüldü)
+# CAS CL-Works terazi protokolü
 
-CL Works terazilere TCP **port 20304** üzerinden ASCII tabanlı bir protokolle PLU gönderiyor. Wireshark yakalamasından çözüldü, kendi ürettiğimiz paket orijinalle bayt bayt aynı.
+CL Works, PLU kaydını terazilere TCP **20304** portundan ASCII tabanlı bir paketle gönderiyor. Bu belge dört Wireshark yakalamasının (AY ÇEKİRDEĞİ, FINDIK İÇİ, ÇİĞ, DİĞER) bayt bayt incelenmesine dayanıyor. Üretilen paket dördünde de orijinalle aynı.
 
-## Akış
-1. PC teraziye bağlanır (TCP).
-2. Terazi `00 00` (2 bayt) gönderir.
-3. PC PLU kaydını gönderir (aşağıdaki W02 paketi).
-4. Terazi `00 00 00 00 00 00` (6 bayt) onay gönderir.
-5. Terazi durum/sonuç gönderir: `^=01.*=01.$=0.&=<IP hex>.@=<port hex>.?=3.W02:O01` (`O01` = başarılı).
+## Akış (Ethernet dolgusu ayıklanmış)
+1. PC teraziye TCP bağlantısı açar.
+2. PC tek bir W02 paketi gönderir.
+3. Terazi 45 bayt cevap verir: `^=01.*=01.$=0.&=<IP hex>.@=<port hex>.?=3.W02:O01` + `\n\n`
+   - `&` terazinin IP'si (C0A801C9 = 192.168.1.201), `@` port (4F50 = 20304), `?=3` TbScale.Country.
+   - `W02:O01` = W02 komutu kabul edildi. Cevap dört testte birebir aynı, ürünle değişmiyor.
+4. Bağlantı kapanır.
 
-## Paket biçimi (W02 = PLU yaz)
-Başlık: `W02A<PLU:5 hane HEX>,<Reyon:2 hane>L<gövde uzunluğu:4 hane HEX>:`
-Gövde: arka arkaya alanlar, her biri `F=<id:2HEX>.<tip:2HEX>,<uzunluk:HEX>:<değer baytları>`
-Son bayt: gövdedeki tüm baytların **XOR**'u (checksum).
+Terazi bağlanınca bir şey göndermiyor; yakalamalarda görünen `00 00` ve `00 00 00 00 00 00` Ethernet çerçeve dolgusu.
 
-Tipler: `57`=W (2 bayt, little-endian), `4C`=L (4 bayt LE), `42`=B (n bayt LE), `4D`=M (1 bayt), `53`=S (metin, Windows-1254).
+## Paket
+`W02A<PLU, 5 hane HEX>,<Reyon, 2 hane>L<gövde uzunluğu, 4 hane HEX>:<gövde><checksum>`
 
-## Bilinen alanlar (AY ÇEKİRDEĞİ örneğinden)
-| F | Tip | Anlam | Örnek |
-|---|---|---|---|
-| 01 | W | Reyon (DeptNo) | 1 |
-| 02 | L | PLU no | 19 |
-| 06 | L | Satış fiyatı × 100 (kuruş) | 24242 = 242,42 ₺ |
-| 0B | L | Ürün kodu (ItemCode) | 9 |
-| 10 | L | ? (AY için 373) | 373 |
-| 19 | W | İçindekiler no (IngredientNo) | 20 |
-| 0A | S | Ürün adı (Name1) | AY CEKİRDEGİ |
-| 1E, 1F | S | (boş) | |
-| diğerleri | | 0 | |
+- Gövde: 23 alan, **her zaman aynı sırada ve aynı alanlar**. Biçim: `F=<id>.<tip>,<uzunluk HEX>:<değer>`
+- Tipler: `57` W = 2 bayt, `4C` L = 4 bayt, `42` B = 1/2/4 bayt, `4D` M = 1 bayt (sayılar little-endian), `53` S = metin (Windows-1254).
+- Checksum: gövde baytlarının XOR'u (başlık dahil değil). Dört testte doğru.
+- W02 hem yeni PLU oluşturuyor hem var olanı güncelliyor (T3 ve T4 yeni satırdı, terazi kabul etti).
 
-`10` alanının anlamı henüz kesin değil; genel çözüm için birkaç farklı ürünün gönderimi daha yakalanıp alanların ürüne göre nasıl değiştiği eşlenmeli.
+## Alanlar
+| F | Tip | TbPLU sütunu | Durum | T1 AY | T2 FINDIK | T3 ÇİĞ | T4 DİĞER |
+|---|---|---|---|---|---|---|---|
+| 01 | W | DeptNo | doğrulandı | 1 | 1 | 2 | 1 |
+| 02 | L | PluNo | doğrulandı | 19 | 2 | 386 | 388 |
+| 04 | M | PluType | doğrulandı | 1 | 1 | 2 | 3 |
+| 05 | B1 | UnitWeight | doğrulandı | 0 | 0 | 1 | 2 |
+| 06 | L | UnitPrice × 100 | doğrulandı | 24242 | 120000 | 1242 | 12332 |
+| 0B | L | ItemCode | doğrulandı | 9 | 1 | 1234 | 5467 |
+| 10 | L | SellByDate | doğrulandı | 373 | 365 | 12 | 365 |
+| 19 | W | IngredientNo | doğrulandı | 20 | 1 | 24 | 23 |
+| 1A | B1 | UseFixedPrice | doğrulandı | 0 | 0 | 1 | 0 |
+| 0A | S | Name1 | doğrulandı | AY CEKİRDEGİ | FINDIK ICI␠ | ÇİĞ | DİĞER |
+| 09 | W | ? | hep 0 | | | | |
+| 0D | L | ? | hep 0 | | | | |
+| 0E | W | ? | hep 0 | | | | |
+| 0F | B1 | ? | hep 0 | | | | |
+| 11 | B2 | ? | hep 0 | | | | |
+| 12 | W | ? | hep 0 | | | | |
+| 37 | W | ? | hep 0 | | | | |
+| 51 | W | ? | hep 0 | | | | |
+| 55 | W | ? | hep 0 | | | | |
+| 5B | B4 | ? | hep 0 | | | | |
+| 64 | L | ? | hep 0 | | | | |
+| 1E | S | ? | hep boş | | | | |
+| 1F | S | ? | hep boş | | | | |
 
-## Doğrulama (3 kör test)
-Üç farklı üründe önce tahmin, sonra yakalama yapıldı; üretilen paket CL'ninkiyle bayt bayt aynı çıktı.
+FixedWeight (T3'te 12, T4'te 54 girildi) pakette hiç yok; bu komutla gönderilmiyor.
 
-Eklenen alan eşlemeleri:
-| F | TbPLU sütunu |
-|---|---|
-| 01 | DeptNo |
-| 02 | PluNo |
-| 04 | PluType |
-| 05 | UnitWeight |
-| 06 | UnitPrice × 100 |
-| 0B | ItemCode |
-| 10 | SellByDate |
-| 19 | IngredientNo |
-| 1A | UseFixedPrice |
-| 0A | Name1 (Windows-1254) |
-| diğerleri | 0 (bu ürün sınıfında) |
-
-`cl-terazi-gonder.ps1`: TbPLU'dan ItemCode ile ürünü okur, paketi kurar, TbScale'deki terazilere TCP 20304'ten gönderir. Grup/mensei/etiket no gibi alanları olan ürünlerde eksik kalabilir (o alanların F kodu henüz bilinmiyor); öyle ürünlerde CL'nin Gönder'i kullanılmalı.
+## Bilinmeyenler
+13 alan dört testte de 0/boş, çünkü test ürünlerinde karşılık gelen sütunlar (GroupNo, LabelNo, OriginNo, Tare, BarcodeID, SpecialPrice, Name2... adayları) boştu. Göndericide bunlar 0 gidiyor; bu sütunları dolu olan bir ürüne gönderilirse o bilgiler terazide sıfırlanır. Eşlemek için:
+1. `canli/cl-istatistik.ps1` ile dükkânda hangi sütunların gerçekten dolu olduğu ölçülür.
+2. Dolu olan sütunlara bir test ürününde **birbirinden farklı** değerler verilip tek yakalama yapılır; her değer tek bir alana düşeceği için eşleme kesinleşir.

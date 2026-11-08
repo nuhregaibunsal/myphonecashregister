@@ -89,9 +89,7 @@ foreach ($pair in $ips) {
         $cl.EndConnect($iar)
         $cl.ReceiveTimeout = $Zaman; $cl.SendTimeout = $Zaman
         $ns = $cl.GetStream()
-        Start-Sleep -Milliseconds 150
         $buf = New-Object byte[] 256
-        if ($ns.DataAvailable) { [void]$ns.Read($buf, 0, 256) }
         $ns.Write($packet, 0, $packet.Length); $ns.Flush()
         $resp = New-Object System.Collections.Generic.List[byte]; $t0 = Get-Date
         while (((Get-Date) - $t0).TotalMilliseconds -lt $Zaman) {
