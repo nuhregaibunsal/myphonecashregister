@@ -1,7 +1,6 @@
 param(
     [Parameter(Mandatory = $true)][string]$Mdb,
-    [Parameter(Mandatory = $true)][int]$Plu,
-    [int]$Dept = 1,
+    [Parameter(Mandatory = $true)][int]$Item,
     [decimal]$Price = -1,
     [string]$Name = "",
     [switch]$SadeceOku
@@ -27,12 +26,11 @@ if (-not $conn) { Write-Output "ERR acilamadi: $err"; exit 3 }
 try {
     if ($SadeceOku) {
         $cmd = $conn.CreateCommand()
-        $cmd.CommandText = "SELECT DeptNo, PluNo, Name1, UnitPrice, SendFlag, WorkFlag FROM TbPLU WHERE PluNo = @p AND DeptNo = @d"
-        [void]$cmd.Parameters.AddWithValue("@p", $Plu)
-        [void]$cmd.Parameters.AddWithValue("@d", $Dept)
+        $cmd.CommandText = "SELECT DeptNo, PluNo, ItemCode, Name1, UnitPrice, SendFlag, WorkFlag FROM TbPLU WHERE ItemCode = @p"
+        [void]$cmd.Parameters.AddWithValue("@p", $Item)
         $r = $cmd.ExecuteReader()
         if ($r.Read()) {
-            Write-Output ("OKU DeptNo={0} PluNo={1} Name1={2} UnitPrice={3} SendFlag={4} WorkFlag={5}" -f $r["DeptNo"], $r["PluNo"], $r["Name1"], $r["UnitPrice"], $r["SendFlag"], $r["WorkFlag"])
+            Write-Output ("OKU DeptNo={0} PluNo={1} ItemCode={2} Name1={3} UnitPrice={4} SendFlag={5} WorkFlag={6}" -f $r["DeptNo"], $r["PluNo"], $r["ItemCode"], $r["Name1"], $r["UnitPrice"], $r["SendFlag"], $r["WorkFlag"])
         } else {
             Write-Output "OKU bulunamadi"
         }
@@ -45,11 +43,10 @@ try {
     $setName = ""
     if ($Name -ne "") { $setName = ", Name1 = @name" }
     $cmd = $conn.CreateCommand()
-    $cmd.CommandText = "UPDATE TbPLU SET UnitPrice = @price$setName, SendFlag = 1, WorkFlag = 1 WHERE PluNo = @p AND DeptNo = @d"
+    $cmd.CommandText = "UPDATE TbPLU SET UnitPrice = @price$setName, SendFlag = 1, WorkFlag = 1 WHERE ItemCode = @p"
     [void]$cmd.Parameters.AddWithValue("@price", [double]$Price)
     if ($Name -ne "") { [void]$cmd.Parameters.AddWithValue("@name", $Name) }
-    [void]$cmd.Parameters.AddWithValue("@p", $Plu)
-    [void]$cmd.Parameters.AddWithValue("@d", $Dept)
+    [void]$cmd.Parameters.AddWithValue("@p", $Item)
     $n = $cmd.ExecuteNonQuery()
     Write-Output "OK $n"
     exit 0

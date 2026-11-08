@@ -169,7 +169,7 @@ function Invoke-CL([int]$plu, [decimal]$price) {
     $ps32 = Join-Path $env:SystemRoot "SysWOW64\WindowsPowerShell\v1.0\powershell.exe"
     if (-not (Test-Path $ps32)) { $ps32 = "powershell.exe" }
     try {
-        $out = & $ps32 -NoProfile -ExecutionPolicy Bypass -File $helper -Mdb $mdb -Plu $plu -Price $price 2>&1
+        $out = & $ps32 -NoProfile -ExecutionPolicy Bypass -File $helper -Mdb $mdb -Item $plu -Price $price 2>&1
         return ([string](@($out) | Where-Object { $_ } | Select-Object -Last 1)).Trim()
     } catch {
         return "ERR $($_.Exception.Message)"
@@ -243,8 +243,8 @@ function Set-Price($ctx) {
                 Log "CL yazma: PLU $plu, fiyat $kg -> $cl"
                 if ($cl -like "OK *") {
                     $n = ($cl -split " ")[1]
-                    if ([int]$n -ge 1) { $teraziMesaj = "Terazi fiyati da guncellendi (PLU $plu). CL Works'u acip Gonder'e basin." }
-                    else { $teraziMesaj = "Terazide PLU $plu bulunamadi, terazi fiyati degismedi." }
+                    if ([int]$n -ge 1) { $teraziMesaj = "Terazi fiyati da guncellendi (urun kodu $plu). CL Works'u acip Gonder'e basin." }
+                    else { $teraziMesaj = "Terazide urun kodu $plu bulunamadi, terazi fiyati degismedi. CL Works'te bu urunun kodunu $plu yapin." }
                 } elseif ($cl) { $teraziMesaj = "Terazi guncellenemedi." }
             }
         } catch { Log "CL yazma hatasi: $($_.Exception.Message)"; $teraziMesaj = "Terazi guncellenemedi." }
