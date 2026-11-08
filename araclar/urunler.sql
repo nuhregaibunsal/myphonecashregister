@@ -2,16 +2,16 @@ USE UNSALDB;
 SET NOCOUNT ON;
 
 SELECT
-  CASE WHEN x.kod <> '' AND x.kod NOT LIKE '%[^0-9]%' THEN x.kod ELSE '' END AS barkod,
+  CASE WHEN x.barkodham <> '' AND x.barkodham NOT LIKE '%[^0-9]%' THEN x.barkodham ELSE '' END AS barkod,
   REPLACE(REPLACE(REPLACE(x.ad, ',', ' '), ';', ' '), '"', '') AS ad,
   x.fiyat,
   x.birim,
   x.plu,
   x.birimind,
-  x.kod
+  x.stokkodu AS kod
 FROM (
   SELECT
-    LTRIM(RTRIM(ISNULL(b.BARCODE, ''))) AS kod,
+    LTRIM(RTRIM(ISNULL(b.BARCODE, ''))) AS barkodham,
     COALESCE(
       NULLIF(LTRIM(RTRIM(s.MALINCINSI)), ''),
       NULLIF(LTRIM(RTRIM(b.ACIKLAMA)), ''),
@@ -27,7 +27,7 @@ FROM (
         AND CAST(fs.PLU AS varchar(20)) NOT IN ('', '0')
     ), '') AS plu,
     b.IND AS birimind,
-    LTRIM(RTRIM(ISNULL(s.STOKKODU, ''))) AS kod,
+    LTRIM(RTRIM(ISNULL(s.STOKKODU, ''))) AS stokkodu,
     s.DELETED,
     s.IPTAL
   FROM dbo.F0101TBLBIRIMLEREX b
@@ -37,5 +37,5 @@ WHERE x.ad IS NOT NULL
   AND x.ad NOT IN ('VADE FARKI', 'KUR FARKI', 'DEVIR')
   AND ISNULL(x.DELETED, 0) = 0
   AND ISNULL(x.IPTAL, 0) = 0
-  AND (x.fiyat > 0 OR x.kod <> '')
+  AND (x.fiyat > 0 OR x.barkodham <> '')
 ORDER BY x.ad;
