@@ -10,7 +10,8 @@
 
 ### Yapılacak
 - [ ] Var olan ürünlere telefondan yeni birim ekleme (örnek: KG ürününe 250 gr / 500 gr paket birimi, ağırlık ve barkodla). Vega'nın birim ekleme şekli (F0101TBLBIRIMLEREX satırı) incelenecek.
-- [ ] İçindekiler sisteminin bağlanması (şu an sadece içerik no seçiliyor).
+- [ ] İçindekiler (CL Works → Veri → İçerik, sadece CL ve 2 paket terazisi): telefonda 3 bölüm. İçindekiler (başlık otomatik), Alerjen uyarısı (her kelime otomatik ~2 kalın), besin değerleri ayrı kutularda (boş bırakılan satır yazılmaz). Kod = ilk boş kod. Kaydedip yalnız paket terazilerine gönderme. Önce CL tablosu (canli/cl-icerik-kesif.ps1) ve gönderim paketi (Wireshark) incelenecek.
+- [ ] Fiyat sorgu sayfası: kamera sürekli açık, okutulan ürünün adı ve fiyatı büyük yazılır. "Düzenle" ile fiyat değiştirme paneli açılır; panel elle ya da 5 saniye sonra kendiliğinden kapanır, açıkken yeni barkod okunursa yeni ürün gelir.
 - [ ] Telefondan stok girişi (mal kabul): ürünü okutup gelen miktarı Vega'ya işleme. Vega'nın stok girişini nasıl kaydettiği incelenecek.
 
 ### Dükkan sahibi elle yapacak
