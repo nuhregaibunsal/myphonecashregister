@@ -130,7 +130,7 @@
 
   let unitData = null;
 
-  const unitFactor = u => (u.agirlik > 0 ? u.agirlik : 1) * (u.carpan > 0 ? u.carpan : 1);
+  const unitFactor = u => (u.agirlik > 0 ? u.agirlik : (u.carpan > 0 ? u.carpan : 1));
   const unitLabel = u => [u.birim, u.agirlik > 0 ? kgFmt(u.agirlik) + " kg" : "", u.barkod].filter(Boolean).join(" · ");
 
   function recalcUnits() {
