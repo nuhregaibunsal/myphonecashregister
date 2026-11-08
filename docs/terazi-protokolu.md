@@ -30,3 +30,23 @@ Tipler: `57`=W (2 bayt, little-endian), `4C`=L (4 bayt LE), `42`=B (n bayt LE), 
 | diğerleri | | 0 | |
 
 `10` alanının anlamı henüz kesin değil; genel çözüm için birkaç farklı ürünün gönderimi daha yakalanıp alanların ürüne göre nasıl değiştiği eşlenmeli.
+
+## Doğrulama (3 kör test)
+Üç farklı üründe önce tahmin, sonra yakalama yapıldı; üretilen paket CL'ninkiyle bayt bayt aynı çıktı.
+
+Eklenen alan eşlemeleri:
+| F | TbPLU sütunu |
+|---|---|
+| 01 | DeptNo |
+| 02 | PluNo |
+| 04 | PluType |
+| 05 | UseFixedPrice |
+| 06 | UnitPrice × 100 |
+| 0B | ItemCode |
+| 10 | SellByDate |
+| 19 | IngredientNo |
+| 1A | UnitWeight |
+| 0A | Name1 (Windows-1254) |
+| diğerleri | 0 (bu ürün sınıfında) |
+
+`cl-terazi-gonder.ps1`: TbPLU'dan ItemCode ile ürünü okur, paketi kurar, TbScale'deki terazilere TCP 20304'ten gönderir. Grup/mensei/etiket no gibi alanları olan ürünlerde eksik kalabilir (o alanların F kodu henüz bilinmiyor); öyle ürünlerde CL'nin Gönder'i kullanılmalı.
