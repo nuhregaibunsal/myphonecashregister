@@ -471,6 +471,7 @@ function Get-Lists {
     $kdv = New-Object System.Collections.Generic.List[string]
     $birim = New-Object System.Collections.Generic.List[string]
     $fiyatAdi = New-Object System.Collections.Generic.List[string]
+    $ozel = @{}
     $next = 1
     $nextBox = New-Object System.Collections.Generic.List[int]
     try {
@@ -491,6 +492,13 @@ function Get-Lists {
         & $q "SELECT DEGER FROM dbo.TBLBIRIMTAN ORDER BY IND" "birim" { param($r) $v = ([string]$r["DEGER"]).Trim(); if ($v) { [void]$birim.Add((J $v)) } }
         & $q "SELECT DEGER FROM dbo.TBLFIYATTAN ORDER BY IND" "fiyatAdi" { param($r) $v = ([string]$r["DEGER"]).Trim(); if ($v) { [void]$fiyatAdi.Add((J $v)) } }
         & $q "SELECT ISNULL(MAX(CASE WHEN LEN(b.BARCODE) BETWEEN 1 AND 6 AND b.BARCODE NOT LIKE '%[^0-9]%' THEN CAST(b.BARCODE AS int) END), 0) + 1 FROM dbo.F0101TBLBIRIMLEREX b JOIN dbo.F0101TBLSTOKLAR s ON s.IND = b.STOKNO WHERE s.STOKKODU LIKE 'TRZ-%'" "sonrakiPlu" { param($r) if (-not ($r[0] -is [DBNull])) { [void]$nextBox.Add([int]$r[0]) } }
+        & $q "SELECT KOD, CATEGORY FROM dbo.F0101TBLSTOKKODTAN WHERE CATEGORY IN (1, 2, 3, 4, 5, 6, 7, 9, 10) AND KOD IS NOT NULL ORDER BY IND DESC" "ozelKodlar" {
+            param($r)
+            $v = ([string]$r["KOD"]).Trim(); $k = [string][int]$r["CATEGORY"]
+            if (-not $v) { return }
+            if (-not $ozel.ContainsKey($k)) { $ozel[$k] = New-Object System.Collections.Generic.List[string] }
+            if (-not ($ozel[$k] -contains $v)) { [void]$ozel[$k].Add($v) }
+        }
         & $q "SELECT ISNULL(MAX(CASE WHEN LEN(SUBSTRING(STOKKODU, 5, 20)) BETWEEN 1 AND 6 AND SUBSTRING(STOKKODU, 5, 20) NOT LIKE '%[^0-9]%' THEN CAST(SUBSTRING(STOKKODU, 5, 20) AS int) END), 0) + 1 FROM dbo.F0101TBLSTOKLAR WHERE STOKKODU LIKE 'TRZ-%'" "sonrakiKod" { param($r) if (-not ($r[0] -is [DBNull])) { [void]$nextBox.Add([int]$r[0]) } }
     } finally {
         $conn.Close()
@@ -499,7 +507,8 @@ function Get-Lists {
     if ($birim.Count -eq 0) { foreach ($v in @("ADET", "KG")) { [void]$birim.Add((J $v)) } }
     if ($fiyatAdi.Count -eq 0) { [void]$fiyatAdi.Add((J "FIYAT")) }
     [void]$sb.Append('{"ok":true,"kdv":[').Append(($kdv -join ",")).Append('],"birim":[').Append(($birim -join ",")).Append('],"fiyatAdi":[').Append(($fiyatAdi -join ","))
-    [void]$sb.Append('],"sonrakiPlu":').Append((J ($next.ToString().PadLeft(5, "0")))).Append(',"hatalar":[').Append((($hatalar | ForEach-Object { J $_ }) -join ",")).Append(']}')
+    [void]$sb.Append('],"ozel":{').Append((($ozel.Keys | Sort-Object | ForEach-Object { '"' + $_ + '":[' + (($ozel[$_] | ForEach-Object { J $_ }) -join ",") + ']' }) -join ",")).Append('}')
+    [void]$sb.Append(',"sonrakiPlu":').Append((J ($next.ToString().PadLeft(5, "0")))).Append(',"hatalar":[').Append((($hatalar | ForEach-Object { J $_ }) -join ",")).Append(']}')
     return ,([System.Text.Encoding]::UTF8.GetBytes($sb.ToString()))
 }
 
@@ -527,6 +536,14 @@ function Add-Product($ctx) {
     if ($f1 -le 0 -or $f1 -ge 1000000 -or $f2 -lt 0 -or $f3 -lt 0 -or $alis -lt 0) { SendJson $ctx 400 @{ ok = $false; error = "Fiyatlari kontrol edin." }; return }
     if (-not $birim) { $birim = "ADET" }
     if (-not $fiyatAdi) { $fiyatAdi = "FIYAT" }
+    $ozelKod = @{}
+    $oz = $b["ozel"]
+    foreach ($n in @(1, 2, 3, 4, 5, 6, 7, 9, 10)) {
+        $v = ""
+        if ($oz -and $oz.ContainsKey("$n")) { $v = ([string]$oz["$n"]).Trim() }
+        if ($v.Length -gt 100) { SendJson $ctx 400 @{ ok = $false; error = "Ozel kod cok uzun (en fazla 100 karakter)." }; return }
+        $ozelKod["$n"] = $v
+    }
     $clIstek = $null
     if ($terazi -and $b["cl"] -and (Get-CLMdb)) {
         $c = $b["cl"]
@@ -561,10 +578,10 @@ BEGIN
   IF @var IS NOT NULL BEGIN ROLLBACK; SELECT -1 AS sonuc, N'barkod' AS neden, @var AS ad; RETURN; END;
 END;
 INSERT INTO dbo.F0101TBLSTOKLAR (MALINCINSI, STOKKODU, DEPOSEVIYESI, URETICI, AYLIKVADE, DEPO, GARANTI, PRIM, IPTAL, STOKTIPI, STOKTAKIP, TEMINYERI, RAFOMRU, KALAN, REZERV,
-  KOD1, KOD2, KOD3, KOD4, KOD5, KOD6, KOD7, KOD8, TAKSITSAYISI, ALISFIYATI, ESKIALISFIYATI, KARTINACILMATARIHI, MALIYET, KDVGRUBU, AKTIF,
+  KOD1, KOD2, KOD3, KOD4, KOD5, KOD6, KOD7, KOD8, KOD9, KOD10, TAKSITSAYISI, ALISFIYATI, ESKIALISFIYATI, KARTINACILMATARIHI, MALIYET, KDVGRUBU, AKTIF,
   ISCILIKIND, ISCILIKBIRIMIND, ISCILIKACIKLAMA, STATUS, OIV, KARORANI, OTV, ALISKDVORANI)
 VALUES (@ad, @kod, 1, NULLIF(@uretici, N''), 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0,
-  N'', N'', N'', N'', N'', N'', N'', N'', 0, @alis, 0, GETDATE(), @maliyet, @kdvGrubu, 0,
+  @k1, @k2, @k3, @k4, @k5, @k6, @k7, N'', NULLIF(@k9, N''), NULLIF(@k10, N''), 0, @alis, 0, GETDATE(), @maliyet, @kdvGrubu, 0,
   0, 0, N'', 1, 0, 0, 0, @alisKdv);
 DECLARE @s int = SCOPE_IDENTITY();
 INSERT INTO dbo.F0101TBLBIRIMLEREX (BIRIMADI, CARPAN, BARCODE, BARCODESTD, STOKNO, ACIKLAMA, KDV, KDVDAHIL, EN, BOY, YUKSEKLIK, AGIRLIK, HACIM,
@@ -573,6 +590,15 @@ VALUES (@birim, 1, @barkod, @std, @s, @fiyatAdi, @kdv, @kdvDahil, 0, 0, 0, 0, 0,
   @f1, @f2, @f3, N'TL', N'TL', N'TL', 0, 0, 0, GETDATE(), 1, 1);
 DECLARE @bi int = SCOPE_IDENTITY();
 UPDATE dbo.F0101TBLSTOKLAR SET ANABIRIM = @bi, BIRIMEX = @bi WHERE IND = @s;
+IF @k1 <> N'' AND NOT EXISTS (SELECT 1 FROM dbo.F0101TBLSTOKKODTAN WHERE CATEGORY = 1 AND KOD = @k1) INSERT INTO dbo.F0101TBLSTOKKODTAN (KOD, CATEGORY) VALUES (@k1, 1);
+IF @k2 <> N'' AND NOT EXISTS (SELECT 1 FROM dbo.F0101TBLSTOKKODTAN WHERE CATEGORY = 2 AND KOD = @k2) INSERT INTO dbo.F0101TBLSTOKKODTAN (KOD, CATEGORY) VALUES (@k2, 2);
+IF @k3 <> N'' AND NOT EXISTS (SELECT 1 FROM dbo.F0101TBLSTOKKODTAN WHERE CATEGORY = 3 AND KOD = @k3) INSERT INTO dbo.F0101TBLSTOKKODTAN (KOD, CATEGORY) VALUES (@k3, 3);
+IF @k4 <> N'' AND NOT EXISTS (SELECT 1 FROM dbo.F0101TBLSTOKKODTAN WHERE CATEGORY = 4 AND KOD = @k4) INSERT INTO dbo.F0101TBLSTOKKODTAN (KOD, CATEGORY) VALUES (@k4, 4);
+IF @k5 <> N'' AND NOT EXISTS (SELECT 1 FROM dbo.F0101TBLSTOKKODTAN WHERE CATEGORY = 5 AND KOD = @k5) INSERT INTO dbo.F0101TBLSTOKKODTAN (KOD, CATEGORY) VALUES (@k5, 5);
+IF @k6 <> N'' AND NOT EXISTS (SELECT 1 FROM dbo.F0101TBLSTOKKODTAN WHERE CATEGORY = 6 AND KOD = @k6) INSERT INTO dbo.F0101TBLSTOKKODTAN (KOD, CATEGORY) VALUES (@k6, 6);
+IF @k7 <> N'' AND NOT EXISTS (SELECT 1 FROM dbo.F0101TBLSTOKKODTAN WHERE CATEGORY = 7 AND KOD = @k7) INSERT INTO dbo.F0101TBLSTOKKODTAN (KOD, CATEGORY) VALUES (@k7, 7);
+IF @k9 <> N'' AND NOT EXISTS (SELECT 1 FROM dbo.F0101TBLSTOKKODTAN WHERE CATEGORY = 9 AND KOD = @k9) INSERT INTO dbo.F0101TBLSTOKKODTAN (KOD, CATEGORY) VALUES (@k9, 9);
+IF @k10 <> N'' AND NOT EXISTS (SELECT 1 FROM dbo.F0101TBLSTOKKODTAN WHERE CATEGORY = 10 AND KOD = @k10) INSERT INTO dbo.F0101TBLSTOKKODTAN (KOD, CATEGORY) VALUES (@k10, 10);
 COMMIT;
 SELECT @s AS sonuc, N'' AS neden, CAST(@bi AS nvarchar(20)) AS ad;
 "@
@@ -597,6 +623,7 @@ SELECT @s AS sonuc, N'' AS neden, CAST(@bi AS nvarchar(20)) AS ad;
         [void]$cmd.Parameters.AddWithValue("@kdvGrubu", $kdvGrubu)
         [void]$cmd.Parameters.AddWithValue("@kdvDahil", $kdvDahil)
         [void]$cmd.Parameters.AddWithValue("@std", $std)
+        foreach ($n in @(1, 2, 3, 4, 5, 6, 7, 9, 10)) { [void]$cmd.Parameters.AddWithValue("@k$n", [string]$ozelKod["$n"]) }
         $r = $cmd.ExecuteReader()
         if ($r.Read()) { $sonuc = [int]$r["sonuc"]; $neden = [string]$r["neden"]; $adOut = [string]$r["ad"] }
         $r.Close()

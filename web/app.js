@@ -509,12 +509,15 @@
       fill($("aBirim"), j.birim, x => x, x => x);
       fill($("aFiyatAdi"), j.fiyatAdi, x => x, x => x);
       fill($("aKdv"), j.kdv, x => x.ind, x => x.ad + " %" + Number(x.oran).toLocaleString("tr-TR"));
+      OZEL.forEach(n => fill($("dlOk" + n), (j.ozel || {})[n] || [], x => x, x => x));
       resetAddForm();
       if (j.hatalar && j.hatalar.length) aMsg("Bazı listeler okunamadı: " + j.hatalar.join(" | "), "err");
     } catch (e) {
       aMsg("Seçim listeleri okunamadı: " + e.message, "err");
     }
   }
+
+  const OZEL = [1, 2, 3, 4, 5, 6, 7, 9, 10];
 
   function aMsg(text, kind) {
     $("aMsg").textContent = text || "";
@@ -630,6 +633,8 @@
     const t = $("aTerazi").checked;
     $("aClBox").hidden = !t;
     if (!t && $("aSabit").checked) { $("aSabit").checked = false; $("aSabitInfo").hidden = true; }
+    if (t && !$("aOk1").value.trim()) $("aOk1").value = "Terazilikler";
+    if (!t && $("aOk1").value.trim() === "Terazilikler") $("aOk1").value = "";
     if (t) {
       if (!clAdTouched) $("aClAd").value = clAdi($("aAd").value);
       if (!$("aClIcerik").value.trim()) $("aClIcerik").value = "0";
@@ -648,6 +653,7 @@
   function resetAddForm() {
     ["aBarkod", "aKod", "aAd", "aF1", "aF2", "aF3", "aAlis", "aAlisKdv", "aUretici"].forEach(id => { $(id).value = ""; });
     $("aTerazi").checked = false;
+    OZEL.forEach(n => { $("aOk" + n).value = ""; });
     $("aClBox").hidden = true;
     resetClFields();
     $("aKdvDahil").checked = false;
@@ -691,6 +697,7 @@
       alisFiyati: numIn("aAlis"),
       alisKdv: Math.round(numIn("aAlisKdv")),
       uretici: $("aUretici").value.trim(),
+      ozel: Object.fromEntries(OZEL.map(n => [String(n), $("aOk" + n).value.trim()]).filter(x => x[1])),
       pin: $("aPin").value.trim()
     };
     if (!data.ad) { aMsg("Stok adını yaz.", "err"); return; }
