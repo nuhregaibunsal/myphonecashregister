@@ -1,7 +1,9 @@
 param(
     [Parameter(Mandatory = $true)][string]$Mdb,
     [string]$Pw = "",
-    [Parameter(Mandatory = $true)][int]$Item,
+    [int]$Item = 0,
+    [int]$Plu = 0,
+    [int]$Dept = 1,
     [string]$TekIp = "",
     [int]$Zaman = 4000
 )
@@ -49,8 +51,15 @@ $products = New-Object System.Collections.Generic.List[object]
 $ips = New-Object System.Collections.Generic.List[object]
 try {
     $cmd = $conn.CreateCommand()
-    $cmd.CommandText = "SELECT DeptNo, PluNo, PluType, ItemCode, UnitPrice, SellByDate, IngredientNo, UseFixedPrice, UnitWeight, Name1 FROM TbPLU WHERE ItemCode = @i"
-    [void]$cmd.Parameters.AddWithValue("@i", $Item)
+    $cmd.CommandText = "SELECT DeptNo, PluNo, PluType, ItemCode, UnitPrice, SellByDate, IngredientNo, UseFixedPrice, UnitWeight, Name1 FROM TbPLU WHERE "
+    if ($Plu -gt 0) {
+        $cmd.CommandText += "PluNo = @p AND DeptNo = @d"
+        [void]$cmd.Parameters.AddWithValue("@p", $Plu)
+        [void]$cmd.Parameters.AddWithValue("@d", $Dept)
+    } else {
+        $cmd.CommandText += "ItemCode = @i AND PluNo < 1000"
+        [void]$cmd.Parameters.AddWithValue("@i", $Item)
+    }
     $r = $cmd.ExecuteReader()
     while ($r.Read()) {
         $g = { param($n, $d = 0) if ($r[$n] -is [DBNull]) { $d } else { $r[$n] } }
@@ -77,7 +86,7 @@ try {
     }
 } finally { $conn.Close() }
 
-if ($products.Count -eq 0) { Write-Output "ERR urun-yok (ItemCode=$Item)"; exit 4 }
+if ($products.Count -eq 0) { Write-Output "ERR urun-yok (ItemCode=$Item PLU=$Plu)"; exit 4 }
 if ($ips.Count -eq 0) { Write-Output "ERR terazi-yok"; exit 5 }
 
 function Send-One([string]$ip, [int]$port, [byte[]]$packet) {
@@ -116,5 +125,5 @@ foreach ($p in $products) {
     }
 }
 $first = $products[0]
-Write-Output ("SONUC {0}/{1} (urun kodu {2}, PLU {3}, fiyat {4})" -f $okCount, $total, $Item, (($products | ForEach-Object { $_.Plu }) -join ","), ($first.Price / 100))
+Write-Output ("SONUC {0}/{1} (urun kodu {2}, PLU {3}, fiyat {4})" -f $okCount, $total, $first.ItemCode, (($products | ForEach-Object { $_.Plu }) -join ","), ($first.Price / 100))
 if ($okCount -ge 1) { exit 0 } else { exit 6 }

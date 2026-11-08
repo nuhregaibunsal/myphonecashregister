@@ -469,14 +469,63 @@
     const b = Scale.normCode($("aBarkod").value);
     $("aStd").textContent = stdText();
     if (!kodTouched) $("aKod").value = $("aTerazi").checked && /^\d+$/.test(b) ? "TRZ-" + parseInt(b, 10) : b;
+    updateClInfo();
     const hit = b && byBarcode.get(b);
     if (hit) aMsg("Bu barkod zaten kayıtlı: " + hit.ad + " (" + tl(hit.fiyat) + ")", "err");
     else if ($("aMsg").className.includes("err")) aMsg("");
   }
 
+  let clAdTouched = false;
+
+  async function checkClPlu(force) {
+    const msg = $("aClPluMsg"), btn = $("aClOneri");
+    const raw = $("aClPlu").value.trim();
+    const v = parseInt(raw, 10);
+    try {
+      const list = await loadCL(force);
+      const used = new Map(list.filter(x => x.bolum === 1).map(x => [x.plu, x.ad]));
+      let o = 1;
+      while (o < 1000 && used.has(o)) o++;
+      btn.hidden = o >= 1000;
+      btn.textContent = "İlk boş PLU: " + o + " (kullan)";
+      btn.dataset.plu = o;
+      if (!raw) { msg.textContent = ""; msg.className = "msg"; return; }
+      if (!/^\d+$/.test(raw) || !(v >= 1 && v < 1000)) { msg.textContent = "PLU 1 ile 999 arasında olmalı."; msg.className = "msg err"; return; }
+      if (used.has(v)) { msg.textContent = "PLU " + v + " dolu: " + used.get(v); msg.className = "msg err"; }
+      else { msg.textContent = "PLU " + v + " boş ✓"; msg.className = "msg ok"; }
+    } catch (e) {
+      msg.textContent = "Terazi listesi okunamadı: " + e.message;
+      msg.className = "msg err";
+      btn.hidden = true;
+    }
+  }
+
+  function updateClInfo() {
+    const k = trzKod($("aKod").value);
+    $("aClInfo").textContent = k
+      ? "Terazi ürün kodu: " + k + " (stok kodundan). Terazi fiyatı: 1. satış fiyatı."
+      : "Stok kodu TRZ-sayı olmalı (örnek TRZ-650), terazi ürün kodu ondan alınır.";
+  }
+
+  function resetClFields() {
+    $("aClAd").value = "";
+    $("aClPlu").value = "";
+    $("aClTip").value = "1";
+    $("aClIcerik").value = "0";
+    $("aClSkt").value = "366";
+    $("aClPluMsg").textContent = "";
+    $("aClOneri").hidden = true;
+    clAdTouched = false;
+  }
+
   function applyTerazi() {
     const t = $("aTerazi").checked;
+    $("aClBox").hidden = !t;
     if (t) {
+      if (!clAdTouched) $("aClAd").value = $("aAd").value.trim().toLocaleUpperCase("tr-TR");
+      if (!$("aClIcerik").value.trim()) $("aClIcerik").value = "0";
+      if (!$("aClSkt").value.trim()) $("aClSkt").value = "366";
+      checkClPlu(true);
       if ([...$("aBirim").options].some(o => o.value === "KG")) $("aBirim").value = "KG";
       if (lists && lists.sonrakiPlu) $("aBarkod").value = lists.sonrakiPlu;
       kodTouched = false;
@@ -490,6 +539,8 @@
   function resetAddForm() {
     ["aBarkod", "aKod", "aAd", "aF1", "aF2", "aF3", "aAlis", "aAlisKdv", "aUretici"].forEach(id => { $(id).value = ""; });
     $("aTerazi").checked = false;
+    $("aClBox").hidden = true;
+    resetClFields();
     $("aKdvDahil").checked = false;
     if ([...$("aBirim").options].some(o => o.value === "ADET")) $("aBirim").value = "ADET";
     if ([...$("aFiyatAdi").options].some(o => o.value === "FIYAT")) $("aFiyatAdi").value = "FIYAT";
@@ -538,6 +589,22 @@
     if (!(data.fiyat1 > 0)) { aMsg("1. satış fiyatını yaz.", "err"); return; }
     if (data.barkod && byBarcode.get(data.barkod)) { aMsg("Bu barkod zaten kayıtlı: " + byBarcode.get(data.barkod).ad, "err"); return; }
     if (!/^\d{4,8}$/.test(data.pin)) { aMsg("PIN 4-8 rakam olmalı.", "err"); return; }
+    if (data.terazi) {
+      const int = id => { const v = $(id).value.trim(); return /^\d+$/.test(v) ? parseInt(v, 10) : -1; };
+      data.cl = {
+        ad: $("aClAd").value.trim().toLocaleUpperCase("tr-TR"),
+        plu: int("aClPlu"),
+        tip: Number($("aClTip").value),
+        icerik: int("aClIcerik"),
+        skt: int("aClSkt")
+      };
+      if (!trzKod(data.stokKodu)) { aMsg("Terazi ürünü için stok kodu TRZ-sayı olmalı (örnek TRZ-650).", "err"); return; }
+      if (!data.cl.ad) { aMsg("Terazideki adı yaz.", "err"); return; }
+      if (!(data.cl.plu >= 1 && data.cl.plu < 1000)) { aMsg("Terazi PLU no yaz (1-999).", "err"); return; }
+      if (data.cl.icerik < 0) { aMsg("İçerik no sayı olmalı (yoksa 0).", "err"); return; }
+      if (data.cl.skt < 0) { aMsg("Son kullanma gün sayısı olmalı.", "err"); return; }
+      if ($("aClPluMsg").className.includes("err")) { aMsg($("aClPluMsg").textContent, "err"); return; }
+    }
     $("aSave").disabled = true;
     aMsg("Kaydediliyor…");
     try {
@@ -548,12 +615,15 @@
         addLog.unshift({ ad: data.ad, barkod: data.barkod, birim: data.birim, fiyat: data.fiyat1, at: new Date() });
         renderAddLog();
         resetAddForm();
-        aMsg(data.ad + " kasaya eklendi" + (data.terazi ? ". CL Works'e de eklemeyi unutmayın." : "."), "ok");
+        clData = null;
+        const ok = !j.clMesaj || /^CL'ye/.test(j.clMesaj);
+        aMsg(data.ad + " kasaya eklendi. " + (j.clMesaj || (data.terazi ? "CL Works'e de eklemeyi unutmayın." : "")), ok ? "ok" : "err");
         await syncLive();
         loadLists();
         return;
       }
       if (res.status === 401) { pinCache = ""; $("aPin").value = ""; }
+      if (j.oneri) { clData = null; checkClPlu(true); }
       aMsg(j.error || ("Eklenemedi (" + res.status + ")"), "err");
     } catch (err) {
       aMsg("Kasa bilgisayarına ulaşılamadı.", "err");
@@ -1279,7 +1349,11 @@
     $("aClear").onclick = () => { resetAddForm(); aMsg(""); };
     $("aTerazi").onchange = applyTerazi;
     $("aBarkod").oninput = checkBarcode;
-    $("aKod").oninput = () => { kodTouched = true; };
+    $("aKod").oninput = () => { kodTouched = true; updateClInfo(); };
+    $("aAd").addEventListener("input", () => { if (!clAdTouched) $("aClAd").value = $("aAd").value.trim().toLocaleUpperCase("tr-TR"); });
+    $("aClAd").oninput = () => { clAdTouched = true; };
+    $("aClPlu").oninput = () => checkClPlu(false);
+    $("aClOneri").onclick = () => { $("aClPlu").value = $("aClOneri").dataset.plu; checkClPlu(false); };
     $("guncelleBtn").onclick = appGuncelle;
     $("stopScan").onclick = stopScan;
     $("torch").onclick = toggleTorch;

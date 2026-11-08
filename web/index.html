@@ -107,6 +107,19 @@
   <section id="tab-ekle" class="tab">
     <form id="aForm" autocomplete="off">
       <label class="check big"><input type="checkbox" id="aTerazi"> Terazi ürünü (kilo ile satılan)</label>
+      <div class="card" id="aClBox" hidden>
+        <h3>Terazi (CL Works) bilgileri</h3>
+        <label>Terazideki adı<input id="aClAd" autocapitalize="characters" maxlength="60"></label>
+        <div class="grid">
+          <label>PLU no<input id="aClPlu" inputmode="numeric"></label>
+          <label>Tip<select id="aClTip"><option value="1">1. Ağırlık</option><option value="2">2. Adet</option></select></label>
+          <label>İçerik no<input id="aClIcerik" inputmode="numeric" value="0"></label>
+          <label>Son kullanma (gün)<input id="aClSkt" inputmode="numeric" value="366"></label>
+        </div>
+        <p class="msg" id="aClPluMsg"></p>
+        <button class="btn" id="aClOneri" type="button" hidden></button>
+        <p class="muted small" id="aClInfo"></p>
+      </div>
       <div class="card">
         <label>Barkod
           <span class="row inline">

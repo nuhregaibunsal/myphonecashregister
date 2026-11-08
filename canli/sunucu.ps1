@@ -200,7 +200,7 @@ function Invoke-CL([int]$plu, [decimal]$price) {
     if (-not (Test-Path $ps32)) { $ps32 = "powershell.exe" }
     try {
         $env:FG_CLPW = Get-CLPw
-        $out = & $ps32 -NoProfile -ExecutionPolicy Bypass -File $helper -Mdb $mdb -Item $plu -Price $price 2>&1
+        $out = & $ps32 -NoProfile -ExecutionPolicy Bypass -File $helper -Mdb $mdb -Item $plu -Price ($price.ToString([System.Globalization.CultureInfo]::InvariantCulture)) 2>&1
         $env:FG_CLPW = ""
         return ([string](@($out) | Where-Object { $_ } | Select-Object -Last 1)).Trim()
     } catch {
@@ -209,7 +209,7 @@ function Invoke-CL([int]$plu, [decimal]$price) {
     }
 }
 
-function Invoke-CLSend([int]$item) {
+function Invoke-CLSend([int]$item, [int]$plu = 0) {
     $mdb = Get-CLMdb
     if (-not $mdb) { return @() }
     $helper = Join-Path $root "cl-terazi-gonder.ps1"
@@ -218,7 +218,7 @@ function Invoke-CLSend([int]$item) {
     if (-not (Test-Path $ps32)) { $ps32 = "powershell.exe" }
     try {
         $env:FG_CLPW = Get-CLPw
-        $out = & $ps32 -NoProfile -ExecutionPolicy Bypass -File $helper -Mdb $mdb -Item $item 2>&1
+        $out = & $ps32 -NoProfile -ExecutionPolicy Bypass -File $helper -Mdb $mdb -Item $item -Plu $plu 2>&1
         $env:FG_CLPW = ""
         return @(@($out) | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
     } catch {
@@ -258,6 +258,48 @@ function Get-CLList {
     $script:clList = [System.Text.Encoding]::UTF8.GetBytes($sb.ToString())
     $script:clListAt = Get-Date
     return $script:clList
+}
+
+function Format-Send($lines, [string]$etiket) {
+    $okIp = @{}; $badIp = @{}
+    foreach ($l in $lines) {
+        $pp = $l -split " "
+        if ($pp.Count -lt 2) { continue }
+        if ($pp[0] -eq "OK") { $okIp[$pp[1]] = 1 } elseif ($pp[0] -eq "FAIL") { $badIp[$pp[1]] = 1 }
+    }
+    foreach ($k in @($badIp.Keys)) { if ($okIp.ContainsKey($k)) { $okIp.Remove($k) } }
+    $allN = $okIp.Count + $badIp.Count
+    $okN = $okIp.Count
+    if ($allN -eq 0) { return "CL veritabani guncellendi, terazilere gonderilemedi. CL Works'te Gonder'e basin." }
+    if ($okN -eq $allN) { return "Terazilere gonderildi ($okN/$allN terazi, $etiket)." }
+    if ($okN -gt 0) { return "$okN/$allN teraziye gonderildi. Ulasilamayanlar: " + ((@($badIp.Keys) | Sort-Object) -join ", ") + ". Onlar acilinca CL Works'te Gonder'e basin." }
+    return "CL veritabani guncellendi ama hicbir teraziye ulasilamadi. CL Works'te Gonder'e basin."
+}
+
+function Invoke-CLAdd([int]$plu, [int]$item, [decimal]$price, [string]$ad, [int]$tip, [int]$icerik, [int]$skt) {
+    $mdb = Get-CLMdb
+    if (-not $mdb) { return "ERR cl-yok" }
+    $helper = Join-Path $root "cl-yaz.ps1"
+    if (-not (Test-Path $helper)) { return "ERR yardimci-yok" }
+    $ps32 = Join-Path $env:SystemRoot "SysWOW64\WindowsPowerShell\v1.0\powershell.exe"
+    if (-not (Test-Path $ps32)) { $ps32 = "powershell.exe" }
+    $b64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($ad))
+    $fiyat = $price.ToString([System.Globalization.CultureInfo]::InvariantCulture)
+    try {
+        $env:FG_CLPW = Get-CLPw
+        $out = & $ps32 -NoProfile -ExecutionPolicy Bypass -File $helper -Mdb $mdb -Ekle -Plu $plu -Item $item -Price $fiyat -NameB64 $b64 -PluType $tip -Ingredient $icerik -SellBy $skt 2>&1
+        return ([string](@($out) | Where-Object { $_ } | Select-Object -Last 1)).Trim()
+    } catch {
+        return "ERR $($_.Exception.Message)"
+    } finally { $env:FG_CLPW = "" }
+}
+
+function Get-CLUsed {
+    $script:clList = $null
+    $j = $ser.DeserializeObject([System.Text.Encoding]::UTF8.GetString((Get-CLList)))
+    $used = @{}
+    foreach ($u in $j["urunler"]) { if ([int]$u["bolum"] -eq 1) { $used[[int]$u["plu"]] = [string]$u["ad"] } }
+    return $used
 }
 
 function TeraziPlu([string]$stokKodu) {
@@ -331,19 +373,7 @@ function Set-Price($ctx) {
                     if ([int]$n -ge 1) {
                         $lines = Invoke-CLSend $plu
                         foreach ($l in $lines) { Log "Terazi gonderim: $l" }
-                        $okIp = @{}; $badIp = @{}
-                        foreach ($l in $lines) {
-                            $pp = $l -split " "
-                            if ($pp.Count -lt 2) { continue }
-                            if ($pp[0] -eq "OK") { $okIp[$pp[1]] = 1 } elseif ($pp[0] -eq "FAIL") { $badIp[$pp[1]] = 1 }
-                        }
-                        foreach ($k in @($badIp.Keys)) { if ($okIp.ContainsKey($k)) { $okIp.Remove($k) } }
-                        $allN = $okIp.Count + $badIp.Count
-                        $okN = $okIp.Count
-                        if ($allN -eq 0) { $teraziMesaj = "CL veritabani guncellendi, terazilere gonderilemedi. CL Works'te Gonder'e basin." }
-                        elseif ($okN -eq $allN) { $teraziMesaj = "Terazilere gonderildi ($okN/$allN terazi, urun kodu $plu)." }
-                        elseif ($okN -gt 0) { $teraziMesaj = "$okN/$allN teraziye gonderildi. Ulasilamayanlar: " + ((@($badIp.Keys) | Sort-Object) -join ", ") + ". Onlar acilinca CL Works'te Gonder'e basin." }
-                        else { $teraziMesaj = "CL veritabani guncellendi ama hicbir teraziye ulasilamadi. CL Works'te Gonder'e basin." }
+                        $teraziMesaj = Format-Send $lines "urun kodu $plu"
                     }
                     else { $teraziMesaj = "Terazide urun kodu $plu bulunamadi, terazi fiyati degismedi. CL Works'te bu urunun kodunu $plu yapin." }
                 } elseif ($cl) { $teraziMesaj = "Terazi guncellenemedi." }
@@ -414,6 +444,23 @@ function Add-Product($ctx) {
     if ($f1 -le 0 -or $f1 -ge 1000000 -or $f2 -lt 0 -or $f3 -lt 0 -or $alis -lt 0) { SendJson $ctx 400 @{ ok = $false; error = "Fiyatlari kontrol edin." }; return }
     if (-not $birim) { $birim = "ADET" }
     if (-not $fiyatAdi) { $fiyatAdi = "FIYAT" }
+    $clIstek = $null
+    if ($terazi -and $b["cl"] -and (Get-CLMdb)) {
+        $c = $b["cl"]
+        $clIstek = @{ plu = [int]$c["plu"]; tip = [int]$c["tip"]; icerik = [int]$c["icerik"]; skt = [int]$c["skt"]; ad = ([string]$c["ad"]).Trim(); item = (TeraziPlu $kod) }
+        if ($clIstek.plu -le 0 -or $clIstek.plu -ge 1000) { SendJson $ctx 400 @{ ok = $false; error = "Terazi PLU no 1 ile 999 arasinda olmali." }; return }
+        if ($clIstek.tip -ne 1 -and $clIstek.tip -ne 2) { SendJson $ctx 400 @{ ok = $false; error = "Terazi tipi 1 (Agirlik) ya da 2 (Adet) olmali." }; return }
+        if ($clIstek.icerik -lt 0 -or $clIstek.icerik -gt 65535) { SendJson $ctx 400 @{ ok = $false; error = "Icerik no gecersiz." }; return }
+        if ($clIstek.skt -lt 0 -or $clIstek.skt -gt 9999) { SendJson $ctx 400 @{ ok = $false; error = "Son kullanma gecersiz." }; return }
+        if (-not $clIstek.ad -or $clIstek.ad.Length -gt 60) { SendJson $ctx 400 @{ ok = $false; error = "Terazideki ad bos ya da cok uzun." }; return }
+        if ($clIstek.item -le 0) { SendJson $ctx 400 @{ ok = $false; error = "Terazi urunu icin stok kodu TRZ-sayi seklinde olmali (ornek TRZ-650)." }; return }
+        $used = Get-CLUsed
+        if ($used.ContainsKey($clIstek.plu)) {
+            $oneri = 1; while ($oneri -lt 1000 -and $used.ContainsKey($oneri)) { $oneri++ }
+            SendJson $ctx 409 @{ ok = $false; error = ("Terazide PLU {0} dolu ({1}). Ilk bos PLU: {2}. Hicbir sey eklenmedi." -f $clIstek.plu, $used[$clIstek.plu], $oneri); oneri = [int]$oneri }
+            return
+        }
+    }
     $std = 0
     if ($terazi) { $std = 5 }
     elseif ($barkod -match '^\d{13}$') { $std = 1 }
@@ -486,7 +533,22 @@ SELECT @s AS sonuc, N'' AS neden, CAST(@bi AS nvarchar(20)) AS ad;
     $line = "{0:yyyy-MM-dd HH:mm:ss};EKLE;{1};{2};{3};{4};{5}" -f (Get-Date), $sonuc, $kod, $ad.Replace(";", " "), $f1, $ip
     Add-Content -Path $changeLog -Value $line -Encoding UTF8
     Log "Urun eklendi: $kod $ad ($ip)"
-    SendJson $ctx 200 @{ ok = $true; stok = [int]$sonuc; birimind = [int]$adOut }
+    $clMesaj = ""
+    if ($clIstek) {
+        $res = Invoke-CLAdd $clIstek.plu $clIstek.item $f1 $clIstek.ad $clIstek.tip $clIstek.icerik $clIstek.skt
+        Log "CL ekleme: PLU $($clIstek.plu), urun kodu $($clIstek.item) -> $res"
+        $script:clList = $null
+        if ($res -like "OK eklendi*") {
+            $lines = Invoke-CLSend 0 $clIstek.plu
+            foreach ($l in $lines) { Log "Terazi gonderim: $l" }
+            $clMesaj = "CL'ye PLU $($clIstek.plu) olarak eklendi. " + (Format-Send $lines "PLU $($clIstek.plu)")
+        } elseif ($res -like "ERR plu-dolu*") {
+            $clMesaj = "Kasaya eklendi ama terazide PLU $($clIstek.plu) bu arada dolmus. CL'ye elle ekleyin. Ilk bos PLU: " + ($res -split " ")[2]
+        } else {
+            $clMesaj = "Kasaya eklendi ama CL'ye eklenemedi ($res). CL Works'te elle ekleyin."
+        }
+    }
+    SendJson $ctx 200 @{ ok = $true; stok = [int]$sonuc; birimind = [int]$adOut; clMesaj = [string]$clMesaj }
 }
 
 $types = @{

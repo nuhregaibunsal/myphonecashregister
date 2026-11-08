@@ -5,7 +5,14 @@ param(
     [string]$Name = "",
     [string]$Pw = "",
     [switch]$SadeceOku,
-    [switch]$Liste
+    [switch]$Liste,
+    [switch]$Ekle,
+    [int]$Plu = 0,
+    [int]$Dept = 1,
+    [int]$PluType = 1,
+    [int]$Ingredient = 0,
+    [int]$SellBy = 366,
+    [string]$NameB64 = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -44,10 +51,63 @@ try {
         Write-Output "OK liste"
         exit 0
     }
+    if ($Ekle) {
+        if ($Plu -le 0 -or $Plu -ge 1000) { Write-Output "ERR plu-gecersiz"; exit 4 }
+        if ($Item -le 0) { Write-Output "ERR urun-kodu-yok"; exit 4 }
+        if ($Price -le 0) { Write-Output "ERR fiyat-yok"; exit 4 }
+        $ad = if ($NameB64) { [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($NameB64)) } else { $Name }
+        if (-not $ad) { Write-Output "ERR ad-yok"; exit 4 }
+        $used = New-Object 'System.Collections.Generic.HashSet[int]'
+        $cmd = $conn.CreateCommand()
+        $cmd.CommandText = "SELECT PluNo FROM TbPLU WHERE DeptNo = @d"
+        [void]$cmd.Parameters.AddWithValue("@d", $Dept)
+        $r = $cmd.ExecuteReader()
+        while ($r.Read()) { if (-not ($r["PluNo"] -is [DBNull])) { [void]$used.Add([int]$r["PluNo"]) } }
+        $r.Close()
+        if ($used.Contains($Plu)) {
+            $oneri = 1; while ($oneri -lt 1000 -and $used.Contains($oneri)) { $oneri++ }
+            Write-Output "ERR plu-dolu $oneri"; exit 6
+        }
+        $cmd = $conn.CreateCommand()
+        $cmd.CommandText = "SELECT TOP 1 * FROM TbPLU WHERE DeptNo = @d AND PluNo < 1000 AND PluType = 1 ORDER BY PluNo"
+        [void]$cmd.Parameters.AddWithValue("@d", $Dept)
+        $r = $cmd.ExecuteReader([System.Data.CommandBehavior]::KeyInfo)
+        $schema = $r.GetSchemaTable()
+        if (-not $r.Read()) { $r.Close(); Write-Output "ERR ornek-urun-yok"; exit 7 }
+        $vals = [ordered]@{}
+        $meta = @{}
+        foreach ($row in $schema.Rows) {
+            $cn = [string]$row["ColumnName"]
+            $meta[$cn] = $row
+            if ($row["IsAutoIncrement"] -eq $true -or $row["IsRowVersion"] -eq $true) { continue }
+            $vals[$cn] = $r[$cn]
+        }
+        $r.Close()
+        $set = @{ DeptNo = $Dept; PluNo = $Plu; ItemCode = $Item; Name1 = $ad; UnitPrice = [double]$Price; PluType = $PluType; IngredientNo = $Ingredient; SellByDate = $SellBy; UseFixedPrice = 0; FixedWeight = 0; SendFlag = 1; WorkFlag = 1 }
+        $keys = @($vals.Keys)
+        foreach ($cn in $keys) {
+            if ($vals[$cn] -is [byte[]]) { $vals[$cn] = [DBNull]::Value; continue }
+            if ($cn -match '^Name([2-9]|\d{2,})$' -and $vals[$cn] -is [string]) { $vals[$cn] = ""; continue }
+            if ($set.ContainsKey($cn)) {
+                $dt = $meta[$cn]["DataType"]
+                $vals[$cn] = [Convert]::ChangeType($set[$cn], $dt, [System.Globalization.CultureInfo]::InvariantCulture)
+            }
+        }
+        $size = [int]$meta["Name1"]["ColumnSize"]
+        if ($size -gt 0 -and $ad.Length -gt $size) { Write-Output "ERR ad-uzun $size"; exit 4 }
+        $cols = @($vals.Keys | Where-Object { -not ($vals[$_] -is [DBNull]) })
+        $cmd = $conn.CreateCommand()
+        $cmd.CommandText = "INSERT INTO TbPLU (" + (($cols | ForEach-Object { "[$_]" }) -join ", ") + ") VALUES (" + (($cols | ForEach-Object { "?" }) -join ", ") + ")"
+        $i = 0
+        foreach ($cn in $cols) { $i++; [void]$cmd.Parameters.AddWithValue("p$i", $vals[$cn]) }
+        $n = $cmd.ExecuteNonQuery()
+        Write-Output "OK eklendi $n"
+        exit 0
+    }
     if ($Item -le 0) { Write-Output "ERR urun-kodu-yok"; exit 4 }
     if ($SadeceOku) {
         $cmd = $conn.CreateCommand()
-        $cmd.CommandText = "SELECT DeptNo, PluNo, ItemCode, Name1, UnitPrice, SendFlag, WorkFlag FROM TbPLU WHERE ItemCode = @p"
+        $cmd.CommandText = "SELECT DeptNo, PluNo, ItemCode, Name1, UnitPrice, SendFlag, WorkFlag FROM TbPLU WHERE ItemCode = @p AND PluNo < 1000"
         [void]$cmd.Parameters.AddWithValue("@p", $Item)
         $r = $cmd.ExecuteReader()
         if ($r.Read()) {
@@ -64,7 +124,7 @@ try {
     $setName = ""
     if ($Name -ne "") { $setName = ", Name1 = @name" }
     $cmd = $conn.CreateCommand()
-    $cmd.CommandText = "UPDATE TbPLU SET UnitPrice = @price$setName, SendFlag = 1, WorkFlag = 1 WHERE ItemCode = @p"
+    $cmd.CommandText = "UPDATE TbPLU SET UnitPrice = @price$setName, SendFlag = 1, WorkFlag = 1 WHERE ItemCode = @p AND PluNo < 1000"
     [void]$cmd.Parameters.AddWithValue("@price", [double]$Price)
     if ($Name -ne "") { [void]$cmd.Parameters.AddWithValue("@name", $Name) }
     [void]$cmd.Parameters.AddWithValue("@p", $Item)
