@@ -6,7 +6,7 @@ window.ETIKET_DUZEN = {
     { ad: "Barkod", tip: "barkod", deger: "{barkod}", x: 3, y: 7.5, w: 14.5, h: 26.5, yon: 90, pt: 7 },
     { ad: "Sol çizgi", tip: "cizgi", x: 3.5, y: 6.6, x2: 97, y2: 6.6 },
     { ad: "Barkod sağ çizgi", tip: "cizgi", x: 20.1, y: 6.6, x2: 20.1, y2: 33.5 },
-    { ad: "Fiyat", tip: "metin", deger: "{fiyat}", x: 20.5, y: 7.5, w: 37.5, h: 13, font: "kalin", pt: 36 },
+    { ad: "Fiyat", tip: "metin", deger: "{fiyat} TL", x: 20.5, y: 7.5, w: 37.5, h: 13, font: "kalin", pt: 36 },
     { ad: "TL işareti", tip: "resim", kaynak: "tl", x: 58.75, y: 20, w: 3.9, h: 4.75, yon: 90 },
     { ad: "Fiyat değişim kutusu", tip: "cerceve", x: 19.5, y: 25.5, w: 39.25, h: 7.25 },
     { ad: "Fiyat değişim yazısı", tip: "metin", deger: "Fiyat Degişim Tarihi :\n{tarih}", x: 19.5, y: 25.5, w: 39.25, h: 7.25, font: "serif", pt: 8 },
