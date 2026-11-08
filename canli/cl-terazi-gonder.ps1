@@ -44,10 +44,10 @@ try {
 $nameBytes = $tr.GetBytes($name)
 $fields = @(
     @("01", "57", (LE $dept 2)), @("02", "4C", (LE $plu 4)), @("04", "4D", ([byte[]]@($ptype))),
-    @("05", "42", ([byte[]]@($ufp))), @("06", "4C", (LE $price 4)), @("09", "57", (New-Object byte[] 2)),
+    @("05", "42", ([byte[]]@($uw))), @("06", "4C", (LE $price 4)), @("09", "57", (New-Object byte[] 2)),
     @("0B", "4C", (LE $Item 4)), @("0D", "4C", (New-Object byte[] 4)), @("0E", "57", (New-Object byte[] 2)),
     @("0F", "42", (New-Object byte[] 1)), @("10", "4C", (LE $sellby 4)), @("11", "42", (New-Object byte[] 2)),
-    @("12", "57", (New-Object byte[] 2)), @("19", "57", (LE $ing 2)), @("1A", "42", ([byte[]]@($uw))),
+    @("12", "57", (New-Object byte[] 2)), @("19", "57", (LE $ing 2)), @("1A", "42", ([byte[]]@($ufp))),
     @("37", "57", (New-Object byte[] 2)), @("51", "57", (New-Object byte[] 2)), @("55", "57", (New-Object byte[] 2)),
     @("5B", "42", (New-Object byte[] 4)), @("64", "4C", (New-Object byte[] 4)), @("0A", "53", $nameBytes),
     @("1E", "53", (New-Object byte[] 0)), @("1F", "53", (New-Object byte[] 0))

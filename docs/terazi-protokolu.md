@@ -40,12 +40,12 @@ Eklenen alan eşlemeleri:
 | 01 | DeptNo |
 | 02 | PluNo |
 | 04 | PluType |
-| 05 | UseFixedPrice |
+| 05 | UnitWeight |
 | 06 | UnitPrice × 100 |
 | 0B | ItemCode |
 | 10 | SellByDate |
 | 19 | IngredientNo |
-| 1A | UnitWeight |
+| 1A | UseFixedPrice |
 | 0A | Name1 (Windows-1254) |
 | diğerleri | 0 (bu ürün sınıfında) |
 
