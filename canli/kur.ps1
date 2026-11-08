@@ -28,7 +28,9 @@ try {
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir | Out-Null }
     $zip = Join-Path $env:TEMP "fiyatgor_kurulum.zip"
     $tmp = Join-Path $env:TEMP "fiyatgor_kurulum"
-    Invoke-WebRequest -UseBasicParsing -Uri $zipUrl -OutFile $zip -TimeoutSec 120
+    $ProgressPreference = "SilentlyContinue"
+    $wc = New-Object System.Net.WebClient
+    $wc.DownloadFile($zipUrl, $zip)
     if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force }
     Expand-Archive -Path $zip -DestinationPath $tmp -Force
     $src = Get-ChildItem $tmp -Directory | Select-Object -First 1

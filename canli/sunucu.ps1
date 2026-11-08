@@ -20,7 +20,8 @@ function Update-App {
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
         $zip = Join-Path $env:TEMP "fiyatgor.zip"
         $tmp = Join-Path $env:TEMP "fiyatgor_guncelleme"
-        Invoke-WebRequest -UseBasicParsing -Uri $zipUrl -OutFile $zip -TimeoutSec 30
+        $ProgressPreference = "SilentlyContinue"
+        (New-Object System.Net.WebClient).DownloadFile($zipUrl, $zip)
         if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force }
         Expand-Archive -Path $zip -DestinationPath $tmp -Force
         $src = Get-ChildItem $tmp -Directory | Select-Object -First 1
