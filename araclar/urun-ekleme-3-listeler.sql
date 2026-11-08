@@ -1,0 +1,49 @@
+USE UNSALDB;
+SET NOCOUNT ON;
+
+DECLARE @kdv nvarchar(max) = N'[]', @t sysname, @sql nvarchar(max), @j nvarchar(max), @n bigint;
+DECLARE c CURSOR LOCAL FAST_FORWARD FOR
+  SELECT t.name, SUM(p.rows)
+  FROM sys.tables t JOIN sys.partitions p ON p.object_id = t.object_id AND p.index_id IN (0, 1)
+  WHERE t.name LIKE N'%KDV%' OR t.name LIKE N'%VERGI%'
+  GROUP BY t.name;
+OPEN c;
+FETCH NEXT FROM c INTO @t, @n;
+WHILE @@FETCH_STATUS = 0
+BEGIN
+  SET @j = NULL;
+  IF @n BETWEEN 1 AND 300
+  BEGIN
+    BEGIN TRY
+      SET @sql = N'SELECT @j = (SELECT * FROM dbo.' + QUOTENAME(@t) + N' FOR JSON PATH, INCLUDE_NULL_VALUES)';
+      EXEC sp_executesql @sql, N'@j nvarchar(max) OUTPUT', @j = @j OUTPUT;
+    END TRY
+    BEGIN CATCH
+      SET @j = NULL;
+    END CATCH;
+  END;
+  SET @kdv = JSON_MODIFY(@kdv, 'append $', JSON_QUERY((SELECT @t AS tablo, @n AS satir, JSON_QUERY(ISNULL(@j, N'[]')) AS veri FOR JSON PATH, WITHOUT_ARRAY_WRAPPER)));
+  FETCH NEXT FROM c INTO @t, @n;
+END;
+CLOSE c;
+DEALLOCATE c;
+
+SELECT (
+  SELECT
+    JSON_QUERY((SELECT t.name AS tablo, c.name AS kolon FROM sys.identity_columns c JOIN sys.tables t ON t.object_id = c.object_id WHERE t.name IN (N'F0101TBLSTOKLAR', N'F0101TBLBIRIMLEREX') FOR JSON PATH)) AS kimlik,
+    JSON_QUERY((SELECT i.name, i.is_unique, COL_NAME(ic.object_id, ic.column_id) AS kolon FROM sys.indexes i JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id WHERE i.object_id IN (OBJECT_ID(N'dbo.F0101TBLBIRIMLEREX'), OBJECT_ID(N'dbo.F0101TBLSTOKLAR')) FOR JSON PATH)) AS indexler,
+    JSON_QUERY((SELECT name FROM sys.triggers WHERE parent_id IN (OBJECT_ID(N'dbo.F0101TBLBIRIMLEREX'), OBJECT_ID(N'dbo.F0101TBLSTOKLAR')) FOR JSON PATH)) AS tetikleyiciler,
+    JSON_QUERY(@kdv) AS kdvTablolari,
+    JSON_QUERY((SELECT * FROM dbo.TBLBIRIM FOR JSON PATH)) AS birim,
+    JSON_QUERY((SELECT * FROM dbo.TBLBIRIMTAN FOR JSON PATH)) AS birimtan,
+    JSON_QUERY((SELECT * FROM dbo.TBLFIYATTAN FOR JSON PATH)) AS fiyattan,
+    JSON_QUERY((SELECT * FROM dbo.TBLBARKODSTANDART FOR JSON PATH)) AS barkodstd,
+    JSON_QUERY((SELECT CATEGORY, COUNT(*) AS adet, MIN(KOD) AS ornek1, MAX(KOD) AS ornek2 FROM dbo.F0101TBLSTOKKODTAN GROUP BY CATEGORY FOR JSON PATH)) AS kodlar,
+    JSON_QUERY((SELECT KDVGRUBU, COUNT(*) AS adet FROM dbo.F0101TBLSTOKLAR GROUP BY KDVGRUBU FOR JSON PATH)) AS kdvGrubuKullanim,
+    JSON_QUERY((SELECT BARCODESTD, COUNT(*) AS adet FROM dbo.F0101TBLBIRIMLEREX GROUP BY BARCODESTD FOR JSON PATH)) AS barkodStdKullanim,
+    JSON_QUERY((SELECT STOKTIPI, COUNT(*) AS adet FROM dbo.F0101TBLSTOKLAR GROUP BY STOKTIPI FOR JSON PATH)) AS stokTipiKullanim,
+    JSON_QUERY((SELECT ACIKLAMA, COUNT(*) AS adet FROM dbo.F0101TBLBIRIMLEREX GROUP BY ACIKLAMA FOR JSON PATH)) AS fiyatAdiKullanim,
+    JSON_QUERY((SELECT BIRIMADI, KDV, KDVDAHIL, COUNT(*) AS adet FROM dbo.F0101TBLBIRIMLEREX GROUP BY BIRIMADI, KDV, KDVDAHIL FOR JSON PATH)) AS birimKdvKullanim,
+    JSON_QUERY((SELECT TOP 8 s.MALINCINSI, s.STOKKODU, b.BARCODE, b.BARCODESTD, b.BIRIMADI, b.SATISFIYATI1, s.KDVGRUBU FROM dbo.F0101TBLBIRIMLEREX b JOIN dbo.F0101TBLSTOKLAR s ON s.IND = b.STOKNO WHERE b.BIRIMADI = N'KG' AND LEN(b.BARCODE) BETWEEN 1 AND 7 ORDER BY b.IND DESC FOR JSON PATH)) AS kisaBarkodluKgUrunler
+  FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+) AS KopyalaYapistir;
