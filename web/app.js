@@ -182,6 +182,7 @@
     $("fSearch").value = "";
     $("fUnitsBox").hidden = true;
     $("fUnits").innerHTML = "";
+    $("fTerazi").hidden = true;
     fMsg("");
     try {
       const res = await fetch("api/birimler?ind=" + encodeURIComponent(p.birimind), { cache: "no-store" });
@@ -212,6 +213,8 @@
         $("fUnitsBox").hidden = false;
       }
       $("fSave").disabled = false;
+      const tk = trzKod(j.kod);
+      if (tk) showTerazi(p, tk);
       setTimeout(() => $("fNew").focus(), 50);
     } catch (e) {
       $("fInfo").textContent = "";
@@ -266,6 +269,7 @@
       const j = await res.json().catch(() => ({}));
       if (res.ok && j.ok) {
         pinCache = pin; pinAt = Date.now();
+        clData = null;
         real.forEach(c => { const pr = products.find(x => x.birimind === c.ind); if (pr) pr.fiyat = c.yeni; });
         priceLog.unshift({ ad: unitData.ad, eski: main.fiyat, yeni: round2(yeni), birimSayisi: real.length, at: new Date() });
         renderPriceLog();
@@ -285,6 +289,82 @@
       fMsg("Kasa bilgisayarına ulaşılamadı.", "err");
     }
     $("fSave").disabled = false;
+  }
+
+  let clData = null, clAt = 0;
+
+  async function loadCL(force) {
+    if (!force && clData && Date.now() - clAt < 60000) return clData;
+    const res = await fetch("api/terazi", { cache: "no-store" });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok || !j.ok) throw new Error(j.error || ("HTTP " + res.status));
+    clData = j.urunler || [];
+    clAt = Date.now();
+    return clData;
+  }
+
+  const trzKod = k => { const m = String(k || "").match(/TRZ[^0-9]*0*([0-9]+)/i); return m ? parseInt(m[1], 10) : 0; };
+  const clLine = x => "PLU " + x.plu + " · " + x.ad + " · " + tl(x.fiyat);
+
+  async function showTerazi(p, kod) {
+    const el = $("fTerazi");
+    el.hidden = false;
+    el.className = "msg";
+    el.textContent = "Terazi ürünleri okunuyor…";
+    try {
+      const list = (await loadCL()).filter(x => x.kod === kod);
+      if (priceSel !== p) return;
+      if (!list.length) {
+        el.className = "msg err";
+        el.textContent = "Terazide ürün kodu " + kod + " olan ürün yok, terazi fiyatı değişmez.";
+      } else {
+        el.className = list.length > 1 ? "msg err" : "msg";
+        el.textContent = "Terazide birlikte değişecek (ürün kodu " + kod + "): " + list.map(clLine).join(" | ");
+      }
+    } catch (e) {
+      if (priceSel !== p) return;
+      el.className = "msg err";
+      el.textContent = "Terazi ürünleri okunamadı: " + e.message;
+    }
+  }
+
+  async function showSameCodes() {
+    const ul = $("tKodList");
+    const msg = $("tKodMsg");
+    ul.innerHTML = "";
+    msg.className = "msg";
+    msg.textContent = "Okunuyor…";
+    $("tKodBtn").disabled = true;
+    try {
+      const data = await loadCL(true);
+      const g = new Map();
+      data.forEach(x => { if (!g.has(x.kod)) g.set(x.kod, []); g.get(x.kod).push(x); });
+      const kasa = new Set(products.map(p => trzKod(p.kod)).filter(Boolean));
+      const groups = [...g.entries()]
+        .filter(([k, v]) => v.length > 1 || k <= 0)
+        .map(([k, v]) => ({ k, v, farkli: new Set(v.map(x => Number(x.fiyat).toFixed(2))).size > 1 }))
+        .sort((a, b) => (b.farkli - a.farkli) || (a.k - b.k));
+      groups.forEach(gr => {
+        const li = document.createElement("li");
+        li.innerHTML = '<div class="info"><b></b><span class="muted small"></span></div>';
+        const notlar = [gr.v.length + " ürün"];
+        if (gr.k <= 0) notlar.push("ürün kodu boş");
+        if (gr.farkli) notlar.push("fiyatlar farklı");
+        if (gr.k > 0 && products.length && !kasa.has(gr.k)) notlar.push("kasada TRZ-" + gr.k + " yok");
+        li.querySelector("b").textContent = (gr.k > 0 ? "Ürün kodu " + gr.k : "Kodsuz") + " — " + notlar.join(", ");
+        const sp = li.querySelector("span");
+        gr.v.sort((a, b) => a.plu - b.plu).forEach(x => { const d = document.createElement("div"); d.textContent = clLine(x); sp.appendChild(d); });
+        if (gr.farkli || gr.k <= 0) li.querySelector("b").className = "msg err";
+        ul.appendChild(li);
+      });
+      const nf = groups.filter(x => x.farkli).length;
+      msg.textContent = groups.length ? (groups.length + " kod birden fazla üründe kullanılıyor" + (nf ? ", " + nf + " tanesinde fiyatlar farklı." : ".")) : "Her ürün kodu tek bir terazi ürününde, aynı kodlu ürün yok.";
+      msg.className = nf ? "msg err" : "msg ok";
+    } catch (e) {
+      msg.className = "msg err";
+      msg.textContent = "Terazi ürünleri okunamadı: " + e.message;
+    }
+    $("tKodBtn").disabled = false;
   }
 
   const kodNorm = v => String(v || "").toLocaleUpperCase("tr-TR").replace(/[^0-9A-ZÇĞİÖŞÜ]/g, "").replace(/^([A-ZÇĞİÖŞÜ]*)0+(?=\d)/, "$1");
@@ -1173,6 +1253,7 @@
     $("fForm").onsubmit = e => { e.preventDefault(); priceFind($("fSearch").value); };
     $("fSearch").oninput = renderPriceSuggest;
     $("fSave").onclick = savePrice;
+    $("tKodBtn").onclick = showSameCodes;
     $("fNew").oninput = recalcUnits;
     $("fCancel").onclick = () => { clearPriceSel(); fMsg(""); };
     $("aScan").onclick = () => { scanMode = "ekle"; aMsg(""); startScan(); window.scrollTo(0, 0); };

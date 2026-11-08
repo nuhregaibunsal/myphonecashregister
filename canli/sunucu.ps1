@@ -227,6 +227,39 @@ function Invoke-CLSend([int]$item) {
     }
 }
 
+$script:clList = $null
+$script:clListAt = [datetime]::MinValue
+
+function Get-CLList {
+    if ($script:clList -and ((Get-Date) - $script:clListAt).TotalSeconds -lt 60) { return $script:clList }
+    $mdb = Get-CLMdb
+    if (-not $mdb) { throw "CL veritabani ayarli degil." }
+    $helper = Join-Path $root "cl-yaz.ps1"
+    if (-not (Test-Path $helper)) { throw "cl-yaz.ps1 yok." }
+    $ps32 = Join-Path $env:SystemRoot "SysWOW64\WindowsPowerShell\v1.0\powershell.exe"
+    if (-not (Test-Path $ps32)) { $ps32 = "powershell.exe" }
+    try {
+        $env:FG_CLPW = Get-CLPw
+        $out = @(& $ps32 -NoProfile -ExecutionPolicy Bypass -File $helper -Mdb $mdb -Liste 2>&1 | ForEach-Object { [string]$_ })
+    } finally { $env:FG_CLPW = "" }
+    if (-not ($out | Where-Object { $_ -eq "OK liste" })) { throw ("CL okunamadi: " + (($out | Select-Object -Last 1) -join "")) }
+    $sb = New-Object System.Text.StringBuilder
+    [void]$sb.Append('{"ok":true,"urunler":[')
+    $first = $true
+    foreach ($l in $out) {
+        $p = $l -split "`t"
+        if ($p.Count -lt 6 -or $p[0] -ne "PLU") { continue }
+        $ad = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($p[5]))
+        if (-not $first) { [void]$sb.Append(",") }
+        $first = $false
+        [void]$sb.Append(('{{"plu":{0},"kod":{1},"bolum":{2},"fiyat":{3},"ad":{4}}}' -f [int64]$p[1], [int64]$p[2], [int]$p[3], $p[4], (J $ad)))
+    }
+    [void]$sb.Append("]}")
+    $script:clList = [System.Text.Encoding]::UTF8.GetBytes($sb.ToString())
+    $script:clListAt = Get-Date
+    return $script:clList
+}
+
 function TeraziPlu([string]$stokKodu) {
     if ($stokKodu -match '(?i)TRZ[^0-9]*0*([0-9]+)') { return [int]$Matches[1] }
     return 0
@@ -291,6 +324,7 @@ function Set-Price($ctx) {
             $plu = TeraziPlu $sk
             if ($plu -gt 0 -and $kg -gt 0) {
                 $cl = Invoke-CL $plu $kg
+                $script:clList = $null
                 Log "CL yazma: PLU $plu, fiyat $kg -> $cl"
                 if ($cl -like "OK *") {
                     $n = ($cl -split " ")[1]
@@ -508,6 +542,13 @@ function Handle($ctx) {
             $script:cache = $null
             SendJson $ctx 200 @{ ok = [bool]$ok; mesaj = $(if ($ok) { "Guncellendi" } else { "Guncellenemedi" }) }
         } catch { SendJson $ctx 500 @{ ok = $false; error = [string]$_.Exception.Message } }
+        return
+    }
+    if ($path -eq "/api/terazi") {
+        try { Send $ctx 200 "application/json; charset=utf-8" (Get-CLList) $true } catch {
+            Log "CL listesi okunamadi: $($_.Exception.Message)"
+            SendJson $ctx 503 @{ ok = $false; error = [string]$_.Exception.Message }
+        }
         return
     }
     if ($path -eq "/api/listeler") {

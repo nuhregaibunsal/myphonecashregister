@@ -75,6 +75,7 @@
     <div class="card" id="fCard" hidden>
       <h2 id="fName"></h2>
       <p class="muted" id="fInfo"></p>
+      <p class="msg" id="fTerazi" hidden></p>
       <p>Şu anki fiyat: <strong id="fOld"></strong></p>
       <div class="grid">
         <label><span id="fNewLabel">Yeni fiyat</span><input id="fNew" inputmode="decimal" autocomplete="off"></label>
@@ -88,6 +89,13 @@
         <button class="btn" id="fCancel" type="button">Vazgeç</button>
         <button class="btn primary" id="fSave" type="button">Kasaya kaydet</button>
       </div>
+    </div>
+    <div class="card">
+      <h2>Terazi ürün kodları</h2>
+      <p class="muted small">CL'de aynı ürün kodunu kullanan ürünler birlikte değişir. Fiyatı birbirinden farklı olanlar kırmızı görünür.</p>
+      <button class="btn" id="tKodBtn" type="button">Aynı kodlu terazi ürünlerini göster</button>
+      <p class="msg" id="tKodMsg"></p>
+      <ul class="units" id="tKodList"></ul>
     </div>
     <div class="card" id="fLogCard" hidden>
       <h2>Bugün değişenler</h2>
