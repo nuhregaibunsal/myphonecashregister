@@ -10,12 +10,17 @@ function Cut($v) { $s = [string]$v; if ($s.Length -gt 40) { $s.Substring(0, 40) 
 
 Say "CL Works veritabani aramasi ($(Get-Date -Format 'yyyy-MM-dd HH:mm'))" Cyan
 
-$roots = @("C:\", ${env:ProgramFiles(x86)}, $env:ProgramFiles, $env:ProgramData, "$env:USERPROFILE\Documents", "$env:PUBLIC\Documents", "$env:USERPROFILE\Desktop") | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
-$dirs = foreach ($r in $roots) { Get-ChildItem -LiteralPath $r -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '(?i)cl.?works|cas|cl.?5000|clp|terazi|scale|label|etiket' } }
-$files = @(foreach ($d in ($dirs | Select-Object -Unique)) { Get-ChildItem -LiteralPath $d.FullName -Recurse -File -Include *.mdb, *.accdb -ErrorAction SilentlyContinue })
-if (-not $files.Count) {
-    Say "Bilinen klasorlerde bulunamadi, tum C: diski taraniyor (birkac dakika surebilir)..." Yellow
-    $files = @(Get-ChildItem -LiteralPath "C:\" -Recurse -Depth 5 -File -Include *.mdb, *.accdb -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notmatch '(?i)\\Windows\\|\\Microsoft Office\\|\\WinSxS\\' })
+if ($env:FG_MDB -and (Test-Path -LiteralPath $env:FG_MDB)) {
+    Say "Verilen dosya kullanilacak: $env:FG_MDB" Cyan
+    $files = @(Get-Item -LiteralPath $env:FG_MDB)
+} else {
+    $roots = @("C:\", ${env:ProgramFiles(x86)}, $env:ProgramFiles, $env:ProgramData, "$env:USERPROFILE\Documents", "$env:PUBLIC\Documents", "$env:USERPROFILE\Desktop") | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
+    $dirs = foreach ($r in $roots) { Get-ChildItem -LiteralPath $r -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '(?i)cl.?works|cas|cl.?5000|clp|terazi|scale|label|etiket' } }
+    $files = @(foreach ($d in ($dirs | Select-Object -Unique)) { Get-ChildItem -LiteralPath $d.FullName -Recurse -File -Include *.mdb, *.accdb -ErrorAction SilentlyContinue })
+    if (-not $files.Count) {
+        Say "Bilinen klasorlerde bulunamadi, tum C: diski taraniyor (birkac dakika surebilir)..." Yellow
+        $files = @(Get-ChildItem -LiteralPath "C:\" -Recurse -Depth 5 -File -Include *.mdb, *.accdb -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notmatch '(?i)\\Windows\\|\\Microsoft Office\\|\\WinSxS\\' })
+    }
 }
 if (-not $files.Count) {
     Say "Hic MDB dosyasi bulunamadi. CL Works ayarlarindaki veritabani yolunu bana yazin." Red
