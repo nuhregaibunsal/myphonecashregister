@@ -12,6 +12,7 @@
 - [x] Fiyat değişiminde ve gönderimde PLU 1000 ve üstü atlanır.
 - [ ] CL'de aynı ürün kodlu ve fiyatı farklı ürünler (126 kod, 108'inde fiyat farklı; PLU 1000 ve 9994-9999 gibi kopyalar) elle temizlenecek.
 - [ ] Telefondan eklenen terazi ürünlerine Vega'daki özel koddan tür atanması (şu an KOD1-KOD8 boş gidiyor). Hangi özel kod alanı ve hangi değerler kullanılacağı netleştirilecek.
+- [ ] Telefondan stok girişi (mal kabul): ürünü okutup gelen miktarı Vega'ya işleme. Vega'nın stok girişini nasıl kaydettiği (hangi tablolar, fiş/hareket yapısı) incelenecek.
 - [ ] Yazıcıdan (Sbaro etiket yazıcısı, USB) etiket basma. Tasarım Vega arayüzünde.
 
 ## Tamamlandı
