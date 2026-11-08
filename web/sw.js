@@ -1,4 +1,4 @@
-const CACHE = "fiyatgor-v23";
+const CACHE = "fiyatgor-v24";
 const FILES = [
   "./",
   "index.html",

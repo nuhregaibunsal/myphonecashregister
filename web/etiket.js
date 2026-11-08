@@ -172,7 +172,8 @@
   function resim(ctx, b, o, img) {
     if (!o.oran) { ctx.drawImage(img, b.x, b.y, b.w, b.h); return; }
     const r = Math.min(b.w / img.width, b.h / img.height);
-    ctx.drawImage(img, b.x, b.y, img.width * r, img.height * r);
+    const w = img.width * r, h = img.height * r;
+    ctx.drawImage(img, b.x + (b.w - w) / 2, b.y + (b.h - h) / 2, w, h);
   }
 
   async function ciz(v, canvas, secenek) {
