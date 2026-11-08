@@ -17,4 +17,5 @@ EXEC (N'GRANT INSERT ON dbo.F0101TBLSTOKLAR TO ' + N'[' + @u + N']');
 EXEC (N'GRANT INSERT ON dbo.F0101TBLBIRIMLEREX TO ' + N'[' + @u + N']');
 EXEC (N'GRANT UPDATE (ANABIRIM, BIRIMEX) ON dbo.F0101TBLSTOKLAR TO ' + N'[' + @u + N']');
 EXEC (N'GRANT SELECT, INSERT ON dbo.F0101TBLSTOKKODTAN TO ' + N'[' + @u + N']');
+EXEC (N'GRANT UPDATE (KOD1, KOD2, KOD3, KOD4, KOD5, KOD6, KOD7, KOD9, KOD10) ON dbo.F0101TBLSTOKLAR TO ' + N'[' + @u + N']');
 SELECT N'Tamam: ' + @u + N' urunleri okuyabilir, fiyat degistirebilir, yeni urun ve ozel kod ekleyebilir. Silme ve baska degisiklik izni yok.' AS Sonuc;

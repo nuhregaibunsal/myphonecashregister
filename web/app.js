@@ -184,6 +184,7 @@
     $("fUnits").innerHTML = "";
     $("fTerazi").hidden = true;
     $("fEtiketBox").hidden = true;
+    $("fOzelBox").hidden = true;
     $("fEtiketSon").hidden = true;
     fMsg("");
     try {
@@ -216,6 +217,7 @@
       }
       $("fSave").disabled = false;
       fillEtiketUnits();
+      loadOzel(j.stok, p);
       const tk = trzKod(j.kod);
       if (tk) showTerazi(p, tk);
       setTimeout(() => $("fNew").focus(), 50);
@@ -519,12 +521,77 @@
 
   const OZEL = [1, 2, 3, 4, 5, 6, 7, 9, 10];
   const BIZIM_KAYIT = "TR-41-K-033887";
-  let kayitOto = false;
+  const trMi = v => String(v || "").trim().toLocaleUpperCase("tr-TR").replace(/[İÜŞÇĞÖ]/g, c => ({ "İ": "I", "Ü": "U", "Ş": "S", "Ç": "C", "Ğ": "G", "Ö": "O" })[c]) === "TURKIYE";
+  const kayitOto = {};
 
-  function uretimYeriDegisti() {
-    const tr = $("aOk10").value.trim().toLocaleUpperCase("tr-TR").replace(/[İÜŞÇĞÖ]/g, c => ({ "İ": "I", "Ü": "U", "Ş": "S", "Ç": "C", "Ğ": "G", "Ö": "O" })[c]) === "TURKIYE";
-    if (tr && !$("aOk6").value.trim()) { $("aOk6").value = BIZIM_KAYIT; kayitOto = true; }
-    else if (!tr && kayitOto && $("aOk6").value === BIZIM_KAYIT) { $("aOk6").value = ""; kayitOto = false; }
+  function uretimYeriDegisti(p) {
+    const tr = trMi($(p + "Ok10").value);
+    if (tr && !$(p + "Ok6").value.trim()) { $(p + "Ok6").value = BIZIM_KAYIT; kayitOto[p] = true; }
+    else if (!tr && kayitOto[p] && $(p + "Ok6").value === BIZIM_KAYIT) { $(p + "Ok6").value = ""; kayitOto[p] = false; }
+  }
+
+  function kayitBagla(p) {
+    $(p + "Ok10").addEventListener("input", () => uretimYeriDegisti(p));
+    $(p + "Ok10").addEventListener("change", () => uretimYeriDegisti(p));
+    $(p + "Ok6").addEventListener("input", () => { kayitOto[p] = false; });
+  }
+
+  let ozelEski = null, ozelStok = 0;
+
+  function okMsg(text, kind) {
+    $("fOkMsg").textContent = text || "";
+    $("fOkMsg").className = "msg " + (kind || "");
+  }
+
+  async function loadOzel(stok, p) {
+    ozelEski = null; ozelStok = 0;
+    okMsg("");
+    try {
+      const res = await fetch("api/ozel?stok=" + encodeURIComponent(stok), { cache: "no-store" });
+      const j = await res.json().catch(() => ({}));
+      if (priceSel !== p) return;
+      if (!res.ok || !j.ok) { $("fOzelBox").hidden = false; okMsg("Özel kodlar okunamadı: " + (j.error || ("HTTP " + res.status)), "err"); return; }
+      ozelEski = j.ozel || {};
+      ozelStok = stok;
+      OZEL.forEach(n => { $("fOk" + n).value = ozelEski[n] || ""; });
+      kayitOto.f = false;
+      $("fOzelBox").hidden = false;
+    } catch (e) {
+      if (priceSel === p) { $("fOzelBox").hidden = false; okMsg("Özel kodlar okunamadı.", "err"); }
+    }
+  }
+
+  async function saveOzel() {
+    if (!ozelEski || !ozelStok) return;
+    const pin = String($("fPin").value).trim();
+    if (!/^\d{4,8}$/.test(pin)) { okMsg("Yukarıya PIN yaz (4-8 rakam).", "err"); return; }
+    const degisen = {};
+    OZEL.forEach(n => { const v = $("fOk" + n).value.trim(); if (v !== (ozelEski[n] || "")) degisen[n] = v; });
+    if (!Object.keys(degisen).length) { okMsg("Değişiklik yok.", "err"); return; }
+    $("fOkKaydet").disabled = true;
+    okMsg("Kaydediliyor…");
+    try {
+      const res = await fetch("api/ozel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ stok: ozelStok, pin, ozel: degisen }) });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok && j.ok) {
+        pinCache = pin; pinAt = Date.now();
+        Object.assign(ozelEski, degisen);
+        okMsg("Özel kodlar kaydedildi (" + Object.keys(degisen).length + " alan).", "ok");
+        Object.entries(degisen).forEach(([n, v]) => {
+          const dl = $("dlOk" + n);
+          if (!v || !dl || [...dl.options].some(o => o.value.toLocaleUpperCase("tr-TR") === v.toLocaleUpperCase("tr-TR"))) return;
+          const o = document.createElement("option");
+          o.value = v; o.textContent = v;
+          dl.insertBefore(o, dl.firstChild);
+        });
+      } else {
+        if (res.status === 401) { pinCache = ""; $("fPin").value = ""; }
+        okMsg(j.error || ("Kaydedilemedi (" + res.status + ")"), "err");
+      }
+    } catch (e) {
+      okMsg("Kasa bilgisayarına ulaşılamadı.", "err");
+    }
+    $("fOkKaydet").disabled = false;
   }
 
   function aMsg(text, kind) {
@@ -662,7 +729,7 @@
     ["aBarkod", "aKod", "aAd", "aF1", "aF2", "aF3", "aAlis", "aAlisKdv", "aUretici"].forEach(id => { $(id).value = ""; });
     $("aTerazi").checked = false;
     OZEL.forEach(n => { $("aOk" + n).value = ""; });
-    kayitOto = false;
+    kayitOto.a = false;
     $("aClBox").hidden = true;
     resetClFields();
     $("aKdvDahil").checked = false;
@@ -1490,9 +1557,9 @@
       updateClInfo();
     };
     $("aSabit").onchange = applySabit;
-    $("aOk10").addEventListener("input", uretimYeriDegisti);
-    $("aOk10").addEventListener("change", uretimYeriDegisti);
-    $("aOk6").addEventListener("input", () => { kayitOto = false; });
+    kayitBagla("a");
+    kayitBagla("f");
+    $("fOkKaydet").onclick = saveOzel;
     $("aAd").addEventListener("input", () => { if (!clAdTouched) $("aClAd").value = clAdi($("aAd").value); });
     $("aClAd").oninput = () => { clAdTouched = true; };
     $("aClPlu").oninput = () => checkClPlu(false);

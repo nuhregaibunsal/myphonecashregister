@@ -90,6 +90,28 @@
         <button class="btn" id="fCancel" type="button">Vazgeç</button>
         <button class="btn primary" id="fSave" type="button">Kasaya kaydet</button>
       </div>
+      <details id="fOzelBox" hidden>
+        <summary>Özel kodlar</summary>
+        <div class="grid">
+          <label>Tür<input id="fOk1" list="dlOk1" autocomplete="off"></label>
+          <label>Üretim yeri<input id="fOk10" list="dlOk10" autocomplete="off"></label>
+        </div>
+        <label>Kayıt no<input id="fOk6" list="dlOk6" autocomplete="off"></label>
+        <details>
+          <summary>Gelişmiş özel kodlar</summary>
+          <div class="grid">
+            <label>Sınıf<input id="fOk2" list="dlOk2" autocomplete="off"></label>
+            <label>Grup<input id="fOk3" list="dlOk3" autocomplete="off"></label>
+            <label>4-ÖK<input id="fOk4" list="dlOk4" autocomplete="off"></label>
+            <label>5-ÖK<input id="fOk5" list="dlOk5" autocomplete="off"></label>
+            <label>Marka<input id="fOk7" list="dlOk7" autocomplete="off"></label>
+            <label>Renk<input id="fOk9" list="dlOk9" autocomplete="off"></label>
+          </div>
+        </details>
+        <p class="muted small">PIN yukarıdaki kutudan alınır.</p>
+        <button class="btn primary" id="fOkKaydet" type="button">Özel kodları kaydet</button>
+        <p class="msg" id="fOkMsg"></p>
+      </details>
       <div id="fEtiketBox" hidden>
         <h3>Etiket</h3>
         <div class="grid">

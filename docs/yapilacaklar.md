@@ -6,7 +6,7 @@
 
 - [ ] Sabit fiyatlı terazi ürünü ekleme (Ekle → Terazi ürünü → Sabit fiyatlı): kasada birim ADET, barkod 28 + ürün kodu (5 hane) + 00001 + kontrol hanesi (örnek TRZ-430 → 2800430000018), CL'de tip 2. Adet. Yazıldı, dükkanda denenecek.
 
-- [ ] Ürün eklerken özel kodlar: Tür (KOD1, terazide "Terazilikler"), üretim yeri (KOD10), kayıt no (KOD6) formda; Sınıf, Grup, 4-ÖK, 5-ÖK, Marka, Renk "Gelişmiş" altında. Listeler F0101TBLSTOKKODTAN (CATEGORY = KOD no), yeni değer listeye eklenir. izin.sql tekrar çalıştırılmalı.
+- [ ] Ürün eklerken özel kodlar: Tür (KOD1, terazide "Terazilikler"), üretim yeri (KOD10), kayıt no (KOD6) formda; Sınıf, Grup, 4-ÖK, 5-ÖK, Marka, Renk "Gelişmiş" altında. Listeler F0101TBLSTOKKODTAN (CATEGORY = KOD no), yeni değer listeye eklenir. Mevcut ürünün özel kodları Fiyat sekmesinde değiştirilebilir. Üretim yeri TURKIYE ise kayıt no varsayılan TR-41-K-033887. izin.sql tekrar çalıştırılmalı.
 
 ### Yapılacak
 - [ ] Var olan ürünlere telefondan yeni birim ekleme (örnek: KG ürününe 250 gr / 500 gr paket birimi, ağırlık ve barkodla). Vega'nın birim ekleme şekli (F0101TBLBIRIMLEREX satırı) incelenecek.

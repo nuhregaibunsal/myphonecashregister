@@ -304,6 +304,63 @@ function Get-CLUsed {
     return $used
 }
 
+$ozelNo = @(1, 2, 3, 4, 5, 6, 7, 9, 10)
+
+function Get-Ozel([int]$stok) {
+    $conn = New-Object System.Data.SqlClient.SqlConnection($connStr)
+    try {
+        $conn.Open()
+        $cmd = $conn.CreateCommand()
+        $cmd.CommandText = "SELECT STOKKODU, MALINCINSI, " + (($ozelNo | ForEach-Object { "KOD$_" }) -join ", ") + " FROM dbo.F0101TBLSTOKLAR WHERE IND = @s"
+        [void]$cmd.Parameters.AddWithValue("@s", $stok)
+        $r = $cmd.ExecuteReader()
+        try {
+            if (-not $r.Read()) { return $null }
+            $parts = foreach ($n in $ozelNo) { $v = if ($r["KOD$n"] -is [DBNull]) { "" } else { ([string]$r["KOD$n"]).Trim() }; '"' + $n + '":' + (J $v) }
+            $json = '{"ok":true,"stok":' + $stok + ',"ad":' + (J ([string]$r["MALINCINSI"])) + ',"ozel":{' + ($parts -join ",") + '}}'
+            return ,([System.Text.Encoding]::UTF8.GetBytes($json))
+        } finally { $r.Close() }
+    } finally { $conn.Close() }
+}
+
+function Set-Ozel($ctx) {
+    $b = Read-JsonBody $ctx
+    $pinState = Test-Pin ([string]$b["pin"])
+    if ($pinState -eq "kapali") { SendJson $ctx 403 @{ ok = $false; error = "Degistirme kapali. Kurulumda PIN belirlenmedi." }; return }
+    if ($pinState -eq "kilitli") { SendJson $ctx 423 @{ ok = $false; error = "Cok fazla yanlis PIN. 5 dakika bekleyin." }; return }
+    if ($pinState -ne "ok") { SendJson $ctx 401 @{ ok = $false; error = "PIN yanlis." }; return }
+    $stok = [int]$b["stok"]
+    $oz = $b["ozel"]
+    if ($stok -le 0 -or -not $oz) { SendJson $ctx 400 @{ ok = $false; error = "Gecersiz istek." }; return }
+    $vals = @{}
+    foreach ($n in $ozelNo) {
+        if (-not $oz.ContainsKey("$n")) { continue }
+        $v = ([string]$oz["$n"]).Trim()
+        if ($v.Length -gt 100) { SendJson $ctx 400 @{ ok = $false; error = "Ozel kod cok uzun (en fazla 100 karakter)." }; return }
+        $vals["$n"] = $v
+    }
+    if ($vals.Count -eq 0) { SendJson $ctx 400 @{ ok = $false; error = "Degisiklik yok." }; return }
+    $keys = @($vals.Keys | Sort-Object { [int]$_ })
+    $sql = "SET XACT_ABORT ON; BEGIN TRAN; UPDATE dbo.F0101TBLSTOKLAR SET " + (($keys | ForEach-Object { "KOD$_ = NULLIF(@k$_, N'')" }) -join ", ") + " WHERE IND = @s; DECLARE @n int = @@ROWCOUNT; "
+    foreach ($k in $keys) { $sql += "IF @n = 1 AND @k$k <> N'' AND NOT EXISTS (SELECT 1 FROM dbo.F0101TBLSTOKKODTAN WHERE CATEGORY = $k AND KOD = @k$k) INSERT INTO dbo.F0101TBLSTOKKODTAN (KOD, CATEGORY) VALUES (@k$k, $k); " }
+    $sql += "COMMIT; SELECT @n;"
+    $conn = New-Object System.Data.SqlClient.SqlConnection($connStr)
+    try {
+        $conn.Open()
+        $cmd = $conn.CreateCommand()
+        $cmd.CommandText = $sql
+        [void]$cmd.Parameters.AddWithValue("@s", $stok)
+        foreach ($k in $keys) { [void]$cmd.Parameters.AddWithValue("@k$k", [string]$vals[$k]) }
+        $n = [int]$cmd.ExecuteScalar()
+    } finally { $conn.Close() }
+    if ($n -ne 1) { SendJson $ctx 404 @{ ok = $false; error = "Urun bulunamadi." }; return }
+    $ip = [string]$ctx.Request.RemoteEndPoint.Address
+    $ozet = ($keys | ForEach-Object { "KOD$_=" + $vals[$_] }) -join " "
+    Add-Content -Path $changeLog -Value ("{0:yyyy-MM-dd HH:mm:ss};OZELKOD;{1};{2};{3}" -f (Get-Date), $stok, $ozet.Replace(";", " "), $ip) -Encoding UTF8
+    Log "Ozel kod degisti: stok $stok, $ozet ($ip)"
+    SendJson $ctx 200 @{ ok = $true }
+}
+
 function Get-LabelData([int]$ind) {
     $conn = New-Object System.Data.SqlClient.SqlConnection($connStr)
     try {
@@ -723,6 +780,19 @@ function Handle($ctx) {
         try { Send $ctx 200 "application/json; charset=utf-8" (Get-CLList) $true } catch {
             Log "CL listesi okunamadi: $($_.Exception.Message)"
             SendJson $ctx 503 @{ ok = $false; error = [string]$_.Exception.Message }
+        }
+        return
+    }
+    if ($path -eq "/api/ozel") {
+        try {
+            if ($ctx.Request.HttpMethod -eq "POST") { Set-Ozel $ctx }
+            else {
+                $res = Get-Ozel ([int]("0" + [string]$ctx.Request.QueryString["stok"]))
+                if ($res) { Send $ctx 200 "application/json; charset=utf-8" $res $true } else { SendJson $ctx 404 @{ ok = $false; error = "Urun bulunamadi." } }
+            }
+        } catch {
+            Log "Ozel kod hatasi: $($_.Exception.Message)"
+            SendJson $ctx 500 @{ ok = $false; error = [string]$_.Exception.Message }
         }
         return
     }
