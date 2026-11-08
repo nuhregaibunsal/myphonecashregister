@@ -118,6 +118,8 @@
 
   function updatePriceTab() {
     $("tabFiyatBtn").hidden = !canEditPrice;
+    $("tabEkleBtn").hidden = !canEditPrice;
+    if (canEditPrice) loadLists();
   }
 
   function fMsg(text, kind) {
@@ -215,6 +217,154 @@
     ul.innerHTML = "";
     if (q.length < 2 || /^\d{6,}$/.test(q)) return;
     search(q, 30).filter(p => p.birimind).slice(0, 8).forEach(p => ul.appendChild(productLi(p, selectForPrice)));
+  }
+
+  let lists = null, kodTouched = false;
+  const addLog = [];
+
+  async function loadLists() {
+    try {
+      const res = await fetch("api/listeler", { cache: "no-store" });
+      const j = await res.json();
+      if (!j || !j.ok) return;
+      lists = j;
+      const fill = (sel, items, val, label) => {
+        sel.innerHTML = "";
+        items.forEach(it => {
+          const o = document.createElement("option");
+          o.value = val(it);
+          o.textContent = label(it);
+          sel.appendChild(o);
+        });
+      };
+      fill($("aBirim"), j.birim, x => x, x => x);
+      fill($("aFiyatAdi"), j.fiyatAdi, x => x, x => x);
+      fill($("aKdv"), j.kdv, x => x.ind, x => x.ad + " %" + Number(x.oran).toLocaleString("tr-TR"));
+      resetAddForm();
+    } catch (e) { }
+  }
+
+  function aMsg(text, kind) {
+    $("aMsg").textContent = text || "";
+    $("aMsg").className = "msg " + (kind || "");
+  }
+
+  function numIn(id) {
+    const v = String($(id).value).trim();
+    if (!v) return 0;
+    return parseFloat(v.replace(/\./g, "").replace(",", ".")) || 0;
+  }
+
+  function stdText() {
+    const b = $("aBarkod").value.trim();
+    if ($("aTerazi").checked) return "Barkod standardı: terazi (Vega'daki terazi ürünleri gibi)";
+    if (/^\d{13}$/.test(b)) return "Barkod standardı: Ean 13";
+    return b ? "Barkod standardı: [Hiçbiri]" : "";
+  }
+
+  function checkBarcode() {
+    const b = Scale.normCode($("aBarkod").value);
+    $("aStd").textContent = stdText();
+    if (!kodTouched) $("aKod").value = $("aTerazi").checked && /^\d+$/.test(b) ? "TRZ-" + parseInt(b, 10) : b;
+    const hit = b && byBarcode.get(b);
+    if (hit) aMsg("Bu barkod zaten kayıtlı: " + hit.ad + " (" + tl(hit.fiyat) + ")", "err");
+    else if ($("aMsg").className.includes("err")) aMsg("");
+  }
+
+  function applyTerazi() {
+    const t = $("aTerazi").checked;
+    if (t) {
+      if ([...$("aBirim").options].some(o => o.value === "KG")) $("aBirim").value = "KG";
+      if (lists && lists.sonrakiPlu) $("aBarkod").value = lists.sonrakiPlu;
+      kodTouched = false;
+    } else {
+      if ([...$("aBirim").options].some(o => o.value === "ADET")) $("aBirim").value = "ADET";
+      if (lists && $("aBarkod").value === lists.sonrakiPlu) $("aBarkod").value = "";
+    }
+    checkBarcode();
+  }
+
+  function resetAddForm() {
+    ["aBarkod", "aKod", "aAd", "aF1", "aF2", "aF3", "aAlis", "aAlisKdv", "aUretici"].forEach(id => { $(id).value = ""; });
+    $("aTerazi").checked = false;
+    $("aKdvDahil").checked = false;
+    if ([...$("aBirim").options].some(o => o.value === "ADET")) $("aBirim").value = "ADET";
+    if ([...$("aFiyatAdi").options].some(o => o.value === "FIYAT")) $("aFiyatAdi").value = "FIYAT";
+    if ($("aKdv").options.length) $("aKdv").selectedIndex = 0;
+    $("aPin").value = pinCache && Date.now() - pinAt < 10 * 60000 ? pinCache : "";
+    kodTouched = false;
+    $("aStd").textContent = "";
+    $("aSave").disabled = false;
+  }
+
+  function renderAddLog() {
+    $("aLogCard").hidden = !addLog.length;
+    const ul = $("aLog");
+    ul.innerHTML = "";
+    addLog.forEach(x => {
+      const li = document.createElement("li");
+      li.innerHTML = '<div class="info"><b></b><span class="muted small"></span></div><strong></strong>';
+      li.querySelector("b").textContent = x.ad;
+      li.querySelector("span").textContent = x.at.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }) + " · " + [x.barkod, x.birim].filter(Boolean).join(" · ");
+      li.querySelector("strong").textContent = tl(x.fiyat);
+      ul.appendChild(li);
+    });
+  }
+
+  async function saveProduct(e) {
+    if (e) e.preventDefault();
+    const data = {
+      terazi: $("aTerazi").checked,
+      barkod: Scale.normCode($("aBarkod").value),
+      stokKodu: $("aKod").value.trim(),
+      ad: $("aAd").value.trim().toLocaleUpperCase("tr-TR"),
+      fiyat1: numIn("aF1"),
+      fiyat2: numIn("aF2"),
+      fiyat3: numIn("aF3"),
+      birim: $("aBirim").value,
+      fiyatAdi: $("aFiyatAdi").value,
+      kdvGrubu: Number($("aKdv").value),
+      kdvDahil: $("aKdvDahil").checked,
+      alisFiyati: numIn("aAlis"),
+      alisKdv: Math.round(numIn("aAlisKdv")),
+      uretici: $("aUretici").value.trim(),
+      pin: $("aPin").value.trim()
+    };
+    if (!data.ad) { aMsg("Stok adını yaz.", "err"); return; }
+    if (!data.stokKodu) { aMsg("Stok kodunu yaz.", "err"); return; }
+    if (!(data.fiyat1 > 0)) { aMsg("1. satış fiyatını yaz.", "err"); return; }
+    if (data.barkod && byBarcode.get(data.barkod)) { aMsg("Bu barkod zaten kayıtlı: " + byBarcode.get(data.barkod).ad, "err"); return; }
+    if (!/^\d{4,8}$/.test(data.pin)) { aMsg("PIN 4-8 rakam olmalı.", "err"); return; }
+    $("aSave").disabled = true;
+    aMsg("Kaydediliyor…");
+    try {
+      const res = await fetch("api/urun", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok && j.ok) {
+        pinCache = data.pin; pinAt = Date.now();
+        addLog.unshift({ ad: data.ad, barkod: data.barkod, birim: data.birim, fiyat: data.fiyat1, at: new Date() });
+        renderAddLog();
+        resetAddForm();
+        aMsg(data.ad + " kasaya eklendi" + (data.terazi ? ". CL Works'e de eklemeyi unutmayın." : "."), "ok");
+        await syncLive();
+        loadLists();
+        return;
+      }
+      if (res.status === 401) { pinCache = ""; $("aPin").value = ""; }
+      aMsg(j.error || ("Eklenemedi (" + res.status + ")"), "err");
+    } catch (err) {
+      aMsg("Kasa bilgisayarına ulaşılamadı.", "err");
+    }
+    $("aSave").disabled = false;
+  }
+
+  function handleAddScan(code) {
+    beep(true);
+    stopScan();
+    $("aBarkod").value = code;
+    kodTouched = false;
+    checkBarcode();
+    $("aAd").focus();
   }
 
   function handlePriceScan(code) {
@@ -383,6 +533,7 @@
 
   function flash(text, kind) {
     if ($("tab-fiyat").classList.contains("active")) { fMsg(text, kind === "ok" ? "ok" : "err"); return; }
+    if ($("tab-ekle").classList.contains("active")) { aMsg(text, kind === "ok" ? "ok" : "err"); return; }
     $("lastScan").hidden = false;
     $("lastScan").className = "last " + (kind || "");
     $("lastScan").textContent = text;
@@ -491,6 +642,7 @@
     if (now - lastTime < 600) return;
     lastCode = code; lastTime = now; lastSeen = now;
     if (scanMode === "fiyat") { handlePriceScan(code); return; }
+    if (scanMode === "ekle") { handleAddScan(code); return; }
     const snap = Scale.parseScale(code, settings) ? snapshot(corners) : null;
     addFromCode(code, snap);
   }
@@ -914,6 +1066,12 @@
     $("fSearch").oninput = renderPriceSuggest;
     $("fSave").onclick = savePrice;
     $("fCancel").onclick = () => { clearPriceSel(); fMsg(""); };
+    $("aScan").onclick = () => { scanMode = "ekle"; aMsg(""); startScan(); window.scrollTo(0, 0); };
+    $("aForm").onsubmit = saveProduct;
+    $("aClear").onclick = () => { resetAddForm(); aMsg(""); };
+    $("aTerazi").onchange = applyTerazi;
+    $("aBarkod").oninput = checkBarcode;
+    $("aKod").oninput = () => { kodTouched = true; };
     $("stopScan").onclick = stopScan;
     $("torch").onclick = toggleTorch;
     $("zoom").onclick = toggleZoom;

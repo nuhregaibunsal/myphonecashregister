@@ -91,6 +91,50 @@
     </div>
   </section>
 
+  <section id="tab-ekle" class="tab">
+    <form id="aForm" autocomplete="off">
+      <label class="check big"><input type="checkbox" id="aTerazi"> Terazi ürünü (kilo ile satılan)</label>
+      <div class="card">
+        <label>Barkod
+          <span class="row inline">
+            <input id="aBarkod" inputmode="numeric">
+            <button class="btn" id="aScan" type="button">📷</button>
+          </span>
+        </label>
+        <label>Stok kodu<input id="aKod"></label>
+        <label>Stok adı<input id="aAd" autocapitalize="characters"></label>
+        <div class="grid">
+          <label>1. Satış fiyatı<input id="aF1" inputmode="decimal"></label>
+          <label>Birim adı<select id="aBirim"></select></label>
+          <label>KDV grubu<select id="aKdv"></select></label>
+          <label>Fiyat adı<select id="aFiyatAdi"></select></label>
+        </div>
+        <label class="check"><input type="checkbox" id="aKdvDahil"> KDV dahil</label>
+        <details>
+          <summary>Diğer bilgiler</summary>
+          <div class="grid">
+            <label>2. Satış fiyatı<input id="aF2" inputmode="decimal"></label>
+            <label>3. Satış fiyatı<input id="aF3" inputmode="decimal"></label>
+            <label>Alış fiyatı<input id="aAlis" inputmode="decimal"></label>
+            <label>Alış KDV oranı<input id="aAlisKdv" inputmode="numeric"></label>
+          </div>
+          <label>Üretici<input id="aUretici"></label>
+        </details>
+        <p class="muted small" id="aStd"></p>
+        <label>PIN<input id="aPin" type="password" inputmode="numeric" autocomplete="off"></label>
+        <p class="msg" id="aMsg"></p>
+        <div class="row">
+          <button class="btn" id="aClear" type="button">Temizle</button>
+          <button class="btn primary" id="aSave" type="submit">Kasaya ekle</button>
+        </div>
+      </div>
+    </form>
+    <div class="card" id="aLogCard" hidden>
+      <h2>Bugün eklenenler</h2>
+      <ul class="list" id="aLog"></ul>
+    </div>
+  </section>
+
   <section id="tab-ayarlar" class="tab">
     <div class="card">
       <h2>Ürün listesini yükle</h2>
@@ -160,6 +204,7 @@
   <button data-tab="hesap" class="active" type="button">🧮<span>Hesap</span></button>
   <button data-tab="urunler" type="button">📋<span>Ürünler</span></button>
   <button data-tab="fiyat" id="tabFiyatBtn" type="button" hidden>₺<span>Fiyat</span></button>
+  <button data-tab="ekle" id="tabEkleBtn" type="button" hidden>＋<span>Ekle</span></button>
   <button data-tab="ayarlar" type="button">⚙️<span>Ayarlar</span></button>
 </nav>
 

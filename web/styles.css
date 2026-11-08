@@ -141,6 +141,12 @@ dialog input { font-size: 24px; text-align: center; margin: 8px 0; }
 .quick { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
 .quick .btn { flex: 1; }
 @media (max-width: 380px) { .grid { grid-template-columns: 1fr; } }
+.row.inline { display: flex; gap: 8px; margin: 0; }
+.row.inline input { flex: 1; }
+.check.big { font-size: 17px; font-weight: 600; padding: 12px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; margin: 0 0 10px; }
+#tab-ekle .card > label { margin-bottom: 8px; }
+details { margin: 8px 0; }
+summary { cursor: pointer; color: var(--muted); padding: 6px 0; }
 .msg.ok { color: var(--ok); font-weight: 600; }
 .msg.err { color: var(--err); font-weight: 600; }
 #tab-fiyat .card h2 { margin-bottom: 2px; }

@@ -92,3 +92,9 @@ Normal PowerShell'de (yönetici gerekmez) şunu çalıştırın. CL Works verita
 ```powershell
 [Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/nuhregaibunsal/myphonecashregister/HEAD/canli/cl-kesif.ps1 | iex
 ```
+
+### Telefondan ürün ekleme
+
+Canlı bağlantıda alt menüde **Ekle** sekmesi çıkar. Alanlar Vega'daki "Hızlı Stok Tanımlama" penceresiyle aynıdır. Ürün Vega'nın yazdığı gibi `F0101TBLSTOKLAR` ve `F0101TBLBIRIMLEREX` tablolarına tek işlemde eklenir. Aynı stok kodu ya da aynı barkod varsa eklenmez. **Terazi ürünü** seçilirse birim KG olur, sıradaki boş terazi numarası barkod, `TRZ-<numara>` stok kodu olarak doldurulur.
+
+Bu özellik için `canli/izin.sql` sorgusunun güncel halinin çalıştırılması ve sunucunun yeniden başlatılması (kurulum komutunu tekrar çalıştırmak ya da bilgisayarı yeniden başlatmak) gerekir.
