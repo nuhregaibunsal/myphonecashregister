@@ -254,7 +254,7 @@
     if (!res.ok || !j.ok) throw new Error(j.error || ("HTTP " + res.status));
     eVeri = j;
     eCanvas = await Etiket.ciz(j);
-    $("eResim").src = eCanvas.toDataURL("image/png");
+    $("eResim").src = (await Etiket.ciz(j, null, { okuma: true })).toDataURL("image/png");
     $("eResim").hidden = false;
   }
 

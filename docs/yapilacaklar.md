@@ -13,7 +13,7 @@
 - [ ] CL'de aynı ürün kodlu ve fiyatı farklı ürünler (126 kod, 108'inde fiyat farklı; PLU 1000 ve 9994-9999 gibi kopyalar) elle temizlenecek.
 - [ ] Telefondan eklenen terazi ürünlerine Vega'daki özel koddan tür atanması (şu an KOD1-KOD8 boş gidiyor). Hangi özel kod alanı ve hangi değerler kullanılacağı netleştirilecek.
 - [ ] Telefondan stok girişi (mal kabul): ürünü okutup gelen miktarı Vega'ya işleme. Vega'nın stok girişini nasıl kaydettiği (hangi tablolar, fiş/hareket yapısı) incelenecek.
-- [ ] Yazıcıdan (Sbarco etiket yazıcısı, USB) etiket basma. Yazıldı (Fiyat sekmesi → Etiket), dükkanda denenecek; gerçek etiket fotoğrafıyla yerleşim kontrol edilecek. Vega'da StokEx → ürünü işaretle → F2 "seçili olanın barkodunu yazdır" → yazıcı ve kopya sayısı seçilir. Keşif aracı: canli/etiket-kesif.ps1 (Vega'nın gönderdiği işi yakalar).
+- [ ] Yazıcıdan (Sbarco etiket yazıcısı, USB) etiket basma. Yazıldı (Fiyat sekmesi → Etiket), dükkanda denenecek; yerleşim web/etiket-duzen.js dosyasında (mm, okuma yönü), konum ve boyutlar dükkan sahibinin vereceği ölçülere göre ayarlanacak. T.E.T.T = yazdırma günü + 366 gün. Vega'da StokEx → ürünü işaretle → F2 "seçili olanın barkodunu yazdır" → yazıcı ve kopya sayısı seçilir. Keşif aracı: canli/etiket-kesif.ps1 (Vega'nın gönderdiği işi yakalar).
 
 ## Tamamlandı
 - [x] Telefondan fiyat sorgulama, barkod/terazi etiketi okuma, sepet

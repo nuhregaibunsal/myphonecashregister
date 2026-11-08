@@ -1,5 +1,6 @@
 (function () {
-  const W = 304, H = 790;
+  const MM = 8;
+  const PT = 203 / 72;
   const BASE = "vendor/etiket/";
   const LATIN = "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD";
   const EXT = "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF";
@@ -11,6 +12,7 @@
     ["EtiketSans", "arimo-latin-700-normal.woff2", "700", LATIN],
     ["EtiketSans", "arimo-latin-ext-700-normal.woff2", "700", EXT]
   ];
+  const FAM = { kalin: "EtiketKalin", serif: "EtiketSerif", sans: "EtiketSans" };
   let ready = null;
 
   function loadImg(src) {
@@ -44,124 +46,134 @@
     if (s.length === 12) s += cs;
     const bits = ["101"];
     const p = PAR[+s[0]];
-    for (let i = 1; i <= 6; i++) {
-      const v = p[i - 1] === "L" ? L[+s[i]] : G[+s[i]];
-      bits.push(v.toString(2).padStart(7, "0"));
-    }
+    for (let i = 1; i <= 6; i++) bits.push((p[i - 1] === "L" ? L[+s[i]] : G[+s[i]]).toString(2).padStart(7, "0"));
     bits.push("01010");
     for (let i = 7; i <= 12; i++) bits.push(R[+s[i]].toString(2).padStart(7, "0"));
     bits.push("101");
     return { metin: s, bits: bits.join("") };
   }
 
-  function fitFont(ctx, text, family, size, maxW) {
-    let s = size;
-    ctx.font = s + "px " + family;
-    while (s > 8 && ctx.measureText(text).width > maxW) { s -= 1; ctx.font = s + "px " + family; }
-    return s;
-  }
-
-  function dikey(ctx, text, x, yAlt, yUst, family, size) {
-    if (!text) return;
-    const s = fitFont(ctx, text, family, size, yAlt - yUst - 4);
-    const w = ctx.measureText(text).width;
-    const y = (yAlt + yUst) / 2 + w / 2;
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(-Math.PI / 2);
-    ctx.textBaseline = "top";
-    ctx.fillText(text, 0, 0);
-    ctx.restore();
-    return s;
-  }
-
-  function cerceve(ctx, x1, y1, x2, y2) { ctx.strokeRect(x1 + 0.5, y1 + 0.5, x2 - x1, y2 - y1); }
-  function cizgi(ctx, x1, y1, x2, y2) { ctx.beginPath(); ctx.moveTo(x1 + 0.5, y1 + 0.5); ctx.lineTo(x2 + 0.5, y2 + 0.5); ctx.stroke(); }
-
   const iki = n => String(n).padStart(2, "0");
+  const gun = d => iki(d.getDate()) + "." + iki(d.getMonth() + 1) + "." + d.getFullYear();
   function tarihYaz(v) {
     if (!v) return "";
     const d = new Date(v);
     if (isNaN(d)) return String(v);
-    return d.getDate() + "." + iki(d.getMonth() + 1) + "." + d.getFullYear() + " " + d.getHours() + ":" + iki(d.getMinutes()) + ":" + iki(d.getSeconds());
+    return gun(d) + " " + iki(d.getHours()) + ":" + iki(d.getMinutes()) + ":" + iki(d.getSeconds());
   }
   const fiyatYaz = n => (Math.round((Number(n) || 0) * 100) / 100).toFixed(2).replace(".", ",");
 
-  async function ciz(v, canvas) {
-    const img = await hazirla();
-    const c = canvas || document.createElement("canvas");
-    c.width = W; c.height = H;
-    const ctx = c.getContext("2d");
-    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = "#000"; ctx.strokeStyle = "#000"; ctx.lineWidth = 1;
-
-    ctx.fillRect(60, 4, 213, 71);
-    ctx.fillStyle = "#fff";
-    ctx.textBaseline = "top"; ctx.textAlign = "center";
-    ctx.font = "20px EtiketKalin";
-    ctx.fillText("ÜNSALLAR", 166, 22);
-    ctx.fillText("KURUYEMİŞ", 166, 46);
-    ctx.textAlign = "left";
-    ctx.fillStyle = "#000";
-
-    cizgi(ctx, 53, 13, 53, 761);
-    cizgi(ctx, 53, 631, 268, 631);
-
-    cerceve(ctx, 60, 77, 120, 290);
-    ctx.font = "20px EtiketSerif";
-    dikey(ctx, "Birim Fiyat  AD/KG F. :", 65, 290, 77, "EtiketSerif", 20);
-    cizgi(ctx, 158, 80, 158, 288); cizgi(ctx, 107, 288, 158, 288); cizgi(ctx, 107, 80, 158, 80);
+  function degerler(v) {
     const ag = Number(v.agirlik) || 0;
-    dikey(ctx, ag > 0 ? (Number(v.fiyat) / ag).toFixed(2) : "0.00", 108, 288, 80, "EtiketKalin", 39);
+    const tett = new Date();
+    tett.setDate(tett.getDate() + 366);
+    return {
+      ad: String(v.ad || ""),
+      fiyat: fiyatYaz(v.fiyat),
+      birimFiyat: ag > 0 ? (Number(v.fiyat) / ag).toFixed(2) : "0.00",
+      tarih: tarihYaz(v.tarih),
+      tett: gun(tett),
+      kod6: String(v.kod6 || ""),
+      kod10: String(v.kod10 || ""),
+      barkod: String(v.barkod || "")
+    };
+  }
 
-    cerceve(ctx, 193, 82, 275, 303);
-    if (String(v.kod10 || "").trim().toLocaleUpperCase("tr-TR") === "TURKIYE") {
-      ctx.drawImage(img.yerli, 194, 83, 81, 220);
-    } else {
-      dikey(ctx, "Üretim Yeri", 198, 303, 82, "EtiketSerif", 23);
-      dikey(ctx, String(v.kod10 || ""), 225, 303, 82, "EtiketSerif", 23);
-    }
+  const doldur = (s, d) => String(s || "").replace(/\{(\w+)\}/g, (m, k) => (k in d ? d[k] : ""));
 
-    ctx.drawImage(img.tl, 160, 288, 38, 31);
+  function kutuAc(ctx, o) {
+    const yon = ((o.yon || 0) % 360 + 360) % 360;
+    ctx.save();
+    ctx.translate((o.x + o.w / 2) * MM, (o.y + o.h / 2) * MM);
+    ctx.rotate(yon * Math.PI / 180);
+    const yan = yon % 180 !== 0;
+    return { bw: (yan ? o.h : o.w) * MM, bh: (yan ? o.w : o.h) * MM };
+  }
 
-    dikey(ctx, fiyatYaz(v.fiyat), 60, 628, 296, "EtiketKalin", 102);
-    dikey(ctx, "TL", 166, 628, 560, "EtiketKalin", 36);
+  function metin(ctx, o, txt) {
+    const lines = txt.split("\n");
+    const { bw, bh } = kutuAc(ctx, o);
+    const fam = FAM[o.font] || FAM.sans;
+    let s = Math.max(4, Math.round((o.pt || 8) * PT));
+    const sigar = () => {
+      ctx.font = s + "px " + fam;
+      return lines.every(l => ctx.measureText(l).width <= bw - 2) && (lines.length === 1 || lines.length * s * 1.1 <= bh + 2);
+    };
+    while (s > 6 && !sigar()) s--;
+    ctx.fillStyle = o.beyaz ? "#fff" : "#000";
+    ctx.textBaseline = "middle";
+    const hiza = o.hiza || "orta";
+    ctx.textAlign = hiza === "sol" ? "left" : hiza === "sag" ? "right" : "center";
+    const x = hiza === "sol" ? -bw / 2 + 2 : hiza === "sag" ? bw / 2 - 2 : 0;
+    lines.forEach((l, i) => ctx.fillText(l, x, (i - (lines.length - 1) / 2) * s * 1.1));
+    ctx.restore();
+  }
 
-    cerceve(ctx, 204, 319, 262, 633);
-    dikey(ctx, "Fiyat Degişim Tarihi :", 209, 633, 319, "EtiketSerif", 23);
-    dikey(ctx, tarihYaz(v.tarih), 236, 633, 319, "EtiketSerif", 23);
-
-    cerceve(ctx, 266, 283, 302, 566);
-    dikey(ctx, "T.E.T.T:" + String(v.kod7 || ""), 272, 566, 283, "EtiketSans", 20);
-    cerceve(ctx, 266, 562, 302, 775);
-    dikey(ctx, String(v.kod6 || ""), 272, 775, 562, "EtiketSans", 20);
-
-    dikey(ctx, String(v.ad || ""), 12, 761, 13, "EtiketSerif", 31);
-
-    const b = ean13(v.barkod);
+  function barkod(ctx, o, kod) {
+    const b = ean13(kod);
+    const { bw, bh } = kutuAc(ctx, o);
+    ctx.fillStyle = "#000";
+    const yazi = Math.round((o.pt || 7) * PT);
     if (b) {
-      const m = 2, x0 = 60 + Math.floor((213 - b.bits.length * m) / 2);
-      for (let i = 0; i < b.bits.length; i++) if (b.bits[i] === "1") ctx.fillRect(x0 + i * m, 648, m, 89);
-      ctx.textAlign = "center"; ctx.textBaseline = "top";
-      fitFont(ctx, b.metin, "EtiketSans", 20, 200);
-      ctx.fillText(b.metin, 60 + 213 / 2, 741);
-      ctx.textAlign = "left";
-    } else if (v.barkod) {
-      ctx.textAlign = "center"; ctx.textBaseline = "top";
-      fitFont(ctx, String(v.barkod), "EtiketSans", 20, 200);
-      ctx.fillText(String(v.barkod), 60 + 213 / 2, 700);
-      ctx.textAlign = "left";
+      const m = Math.max(1, Math.floor(bw / b.bits.length));
+      const x0 = -Math.round(b.bits.length * m / 2);
+      const barH = bh - yazi - 2;
+      for (let i = 0; i < b.bits.length; i++) if (b.bits[i] === "1") ctx.fillRect(x0 + i * m, -bh / 2, m, barH);
+      ctx.font = yazi + "px " + FAM.sans;
+      ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+      ctx.fillText(b.metin, 0, bh / 2);
+    } else if (kod) {
+      ctx.font = yazi + "px " + FAM.sans;
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(kod, 0, 0);
     }
+    ctx.restore();
+  }
 
-    const id = ctx.getImageData(0, 0, W, H);
+  function resim(ctx, o, img) {
+    const { bw, bh } = kutuAc(ctx, o);
+    ctx.drawImage(img, -bw / 2, -bh / 2, bw, bh);
+    ctx.restore();
+  }
+
+  async function ciz(v, canvas, secenek) {
+    const img = await hazirla();
+    const duzen = (secenek && secenek.duzen) || window.ETIKET_DUZEN;
+    const d = degerler(v);
+    const yerli = d.kod10.trim().toLocaleUpperCase("tr-TR") === "TURKIYE";
+    const RW = Math.round(duzen.genislik * MM), RH = Math.round(duzen.yukseklik * MM);
+    const r = document.createElement("canvas");
+    r.width = RW; r.height = RH;
+    const ctx = r.getContext("2d");
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, RW, RH);
+    ctx.strokeStyle = "#000"; ctx.lineWidth = 1;
+    for (const o of duzen.ogeler) {
+      if (o.kosul === "yerli" && !yerli) continue;
+      if (o.kosul === "yerliDegil" && yerli) continue;
+      if (o.tip === "kutu") { ctx.fillStyle = "#000"; ctx.fillRect(o.x * MM, o.y * MM, o.w * MM, o.h * MM); }
+      else if (o.tip === "cerceve") ctx.strokeRect(Math.round(o.x * MM) + 0.5, Math.round(o.y * MM) + 0.5, Math.round(o.w * MM), Math.round(o.h * MM));
+      else if (o.tip === "cizgi") { ctx.beginPath(); ctx.moveTo(Math.round(o.x * MM) + 0.5, Math.round(o.y * MM) + 0.5); ctx.lineTo(Math.round(o.x2 * MM) + 0.5, Math.round(o.y2 * MM) + 0.5); ctx.stroke(); }
+      else if (o.tip === "metin") metin(ctx, o, doldur(o.deger, d));
+      else if (o.tip === "barkod") barkod(ctx, o, doldur(o.deger, d));
+      else if (o.tip === "resim" && img[o.kaynak]) resim(ctx, o, img[o.kaynak]);
+    }
+    const id = ctx.getImageData(0, 0, RW, RH);
     const p = id.data;
     for (let i = 0; i < p.length; i += 4) {
       const k = (p[i] * 299 + p[i + 1] * 587 + p[i + 2] * 114) / 1000 < 150 ? 0 : 255;
       p[i] = p[i + 1] = p[i + 2] = k; p[i + 3] = 255;
     }
     ctx.putImageData(id, 0, 0);
+    if (secenek && secenek.okuma) return r;
+    const c = canvas || document.createElement("canvas");
+    c.width = RH; c.height = RW;
+    const pc = c.getContext("2d");
+    pc.translate(0, RW);
+    pc.rotate(-Math.PI / 2);
+    pc.drawImage(r, 0, 0);
+    pc.setTransform(1, 0, 0, 1, 0, 0);
     return c;
   }
 
-  window.Etiket = { ciz, ean13, hazirla, W, H };
+  window.Etiket = { ciz, ean13, hazirla, degerler };
 })();
