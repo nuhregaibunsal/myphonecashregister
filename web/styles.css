@@ -155,3 +155,8 @@ summary { cursor: pointer; color: var(--muted); padding: 6px 0; }
 .etiket-resim { display: block; width: 100%; max-width: 396px; height: auto; margin: 8px auto 0; border: 1px solid var(--line); background: #fff; image-rendering: pixelated; }
 #fEtiketBox { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 8px; }
 #fEtiketSon { margin-bottom: 12px; }
+.alerjen { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; margin-bottom: 8px; }
+.alerjen label { display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: var(--muted); }
+.alerjen select { padding: 6px; }
+.icerik-onizle { border: 1px solid var(--line); border-radius: 10px; padding: 10px; font-size: 13px; line-height: 1.45; background: var(--card); margin-bottom: 8px; word-break: break-word; }
+#tab-icerik textarea { width: 100%; font: inherit; padding: 8px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: inherit; box-sizing: border-box; }

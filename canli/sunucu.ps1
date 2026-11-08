@@ -146,7 +146,7 @@ function Test-Pin([string]$pin) {
 }
 
 function Read-JsonBody($ctx) {
-    if ($ctx.Request.ContentLength64 -gt 10000) { throw "istek cok buyuk" }
+    if ($ctx.Request.ContentLength64 -gt 20000) { throw "istek cok buyuk" }
     $reader = New-Object System.IO.StreamReader($ctx.Request.InputStream, [System.Text.Encoding]::UTF8)
     $text = $reader.ReadToEnd()
     $reader.Close()
@@ -359,6 +359,58 @@ function Set-Ozel($ctx) {
     Add-Content -Path $changeLog -Value ("{0:yyyy-MM-dd HH:mm:ss};OZELKOD;{1};{2};{3}" -f (Get-Date), $stok, $ozet.Replace(";", " "), $ip) -Encoding UTF8
     Log "Ozel kod degisti: stok $stok, $ozet ($ip)"
     SendJson $ctx 200 @{ ok = $true }
+}
+
+$script:icerikCache = $null
+$script:icerikAt = [datetime]::MinValue
+
+function Invoke-CLHelper([string[]]$argList) {
+    $mdb = Get-CLMdb
+    if (-not $mdb) { throw "CL veritabani ayarli degil." }
+    $helper = Join-Path $root "cl-yaz.ps1"
+    if (-not (Test-Path $helper)) { throw "cl-yaz.ps1 yok." }
+    $ps32 = Join-Path $env:SystemRoot "SysWOW64\WindowsPowerShell\v1.0\powershell.exe"
+    if (-not (Test-Path $ps32)) { $ps32 = "powershell.exe" }
+    try {
+        $env:FG_CLPW = Get-CLPw
+        return @(& $ps32 -NoProfile -ExecutionPolicy Bypass -File $helper -Mdb $mdb @argList 2>&1 | ForEach-Object { [string]$_ })
+    } finally { $env:FG_CLPW = "" }
+}
+
+function Get-Icerikler {
+    if ($script:icerikCache -and ((Get-Date) - $script:icerikAt).TotalSeconds -lt 60) { return $script:icerikCache }
+    $out = Invoke-CLHelper @("-IcerikListe")
+    if (-not ($out | Where-Object { $_ -eq "OK icerik-liste" })) { throw ("CL okunamadi: " + (($out | Select-Object -Last 1) -join "")) }
+    $parts = New-Object System.Collections.Generic.List[string]
+    foreach ($l in $out) {
+        $p = $l -split "`t"
+        if ($p.Count -lt 3 -or $p[0] -ne "ING") { continue }
+        $t = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($p[2]))
+        [void]$parts.Add(('{"kod":' + [int]$p[1] + ',"metin":' + (J $t) + '}'))
+    }
+    $script:icerikCache = [System.Text.Encoding]::UTF8.GetBytes('{"ok":true,"icerikler":[' + ($parts -join ",") + ']}')
+    $script:icerikAt = Get-Date
+    return $script:icerikCache
+}
+
+function Set-Icerik($ctx) {
+    $b = Read-JsonBody $ctx
+    $pinState = Test-Pin ([string]$b["pin"])
+    if ($pinState -eq "kapali") { SendJson $ctx 403 @{ ok = $false; error = "Degistirme kapali. Kurulumda PIN belirlenmedi." }; return }
+    if ($pinState -eq "kilitli") { SendJson $ctx 423 @{ ok = $false; error = "Cok fazla yanlis PIN. 5 dakika bekleyin." }; return }
+    if ($pinState -ne "ok") { SendJson $ctx 401 @{ ok = $false; error = "PIN yanlis." }; return }
+    $kod = [int]$b["kod"]
+    $metin = [string]$b["metin"]
+    if ($kod -le 0 -or $kod -gt 9999) { SendJson $ctx 400 @{ ok = $false; error = "Icerik kodu 1-9999 olmali." }; return }
+    if (-not $metin.Trim() -or $metin.Length -gt 3000) { SendJson $ctx 400 @{ ok = $false; error = "Icerik metni bos ya da cok uzun." }; return }
+    $b64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($metin))
+    $res = (Invoke-CLHelper @("-IcerikYaz", "-Item", "$kod", "-TextB64", $b64) | Where-Object { $_ } | Select-Object -Last 1)
+    $script:icerikCache = $null
+    if (-not ($res -like "OK icerik-*")) { Log "Icerik yazilamadi: $kod -> $res"; SendJson $ctx 500 @{ ok = $false; error = "CL'ye yazilamadi: $res" }; return }
+    $ip = [string]$ctx.Request.RemoteEndPoint.Address
+    Add-Content -Path $changeLog -Value ("{0:yyyy-MM-dd HH:mm:ss};ICERIK;{1};{2};{3}" -f (Get-Date), $kod, ($res -split " ")[1], $ip) -Encoding UTF8
+    Log "Icerik kaydedildi: $kod ($res, $ip)"
+    SendJson $ctx 200 @{ ok = $true; kod = $kod; yeni = [bool]($res -like "OK icerik-eklendi*") }
 }
 
 function Get-LabelData([int]$ind) {
@@ -780,6 +832,16 @@ function Handle($ctx) {
         try { Send $ctx 200 "application/json; charset=utf-8" (Get-CLList) $true } catch {
             Log "CL listesi okunamadi: $($_.Exception.Message)"
             SendJson $ctx 503 @{ ok = $false; error = [string]$_.Exception.Message }
+        }
+        return
+    }
+    if ($path -eq "/api/icerik") {
+        try {
+            if ($ctx.Request.HttpMethod -eq "POST") { Set-Icerik $ctx }
+            else { Send $ctx 200 "application/json; charset=utf-8" (Get-Icerikler) $true }
+        } catch {
+            Log "Icerik hatasi: $($_.Exception.Message)"
+            SendJson $ctx 500 @{ ok = $false; error = [string]$_.Exception.Message }
         }
         return
     }

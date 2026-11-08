@@ -216,6 +216,38 @@
     </div>
   </section>
 
+  <section id="tab-icerik" class="tab">
+    <div class="card">
+      <h2>İçerik (CL Works)</h2>
+      <form class="row" id="iForm" autocomplete="off">
+        <input id="iAra" placeholder="İçerik kodu ya da içindekilerden bir kelime" enterkeyhint="search">
+        <button class="btn" type="submit">Bul</button>
+      </form>
+      <ul class="suggest" id="iSuggest"></ul>
+      <div class="row"><button class="btn" id="iYeni" type="button">＋ Yeni içerik</button></div>
+      <p class="msg" id="iMsg"></p>
+    </div>
+    <div class="card" id="iCard" hidden>
+      <h2 id="iBaslik"></h2>
+      <label>İçindekiler<textarea id="iIcindekiler" rows="3"></textarea></label>
+      <label>Kayıt no<input id="iKayit" autocomplete="off"></label>
+      <h3>Alerjen uyarısı</h3>
+      <div class="alerjen" id="iAlerjen"></div>
+      <label>Ek alerjen yazısı (listede olmayan)<input id="iAlerjenEk" autocomplete="off"></label>
+      <h3>Enerji ve besin öğeleri (100 gr için)</h3>
+      <div class="grid" id="iBesin"></div>
+      <p class="msg err" id="iUyari" hidden></p>
+      <h3>Önizleme</h3>
+      <div class="icerik-onizle" id="iOnizle"></div>
+      <label>PIN<input id="iPin" type="password" inputmode="numeric" autocomplete="off"></label>
+      <p class="msg" id="iKayitMsg"></p>
+      <div class="row">
+        <button class="btn" id="iVazgec" type="button">Vazgeç</button>
+        <button class="btn primary" id="iKaydet" type="button">CL'ye kaydet</button>
+      </div>
+    </div>
+  </section>
+
   <section id="tab-ayarlar" class="tab">
     <div class="card">
       <h2>Ürün listesini yükle</h2>
@@ -293,6 +325,7 @@
   <button data-tab="urunler" type="button">📋<span>Ürünler</span></button>
   <button data-tab="fiyat" id="tabFiyatBtn" type="button" hidden>₺<span>Fiyat</span></button>
   <button data-tab="ekle" id="tabEkleBtn" type="button" hidden>＋<span>Ekle</span></button>
+  <button data-tab="icerik" id="tabIcerikBtn" type="button" hidden>🥜<span>İçerik</span></button>
   <button data-tab="ayarlar" type="button">⚙️<span>Ayarlar</span></button>
 </nav>
 
@@ -330,6 +363,7 @@
 <script src="vendor/ocr/tesseract.min.js" defer></script>
 <script src="ocr.js" defer></script>
 <script src="scale.js" defer></script>
+<script src="icerik.js" defer></script>
 <script src="etiket-duzen.js" defer></script>
 <script src="etiket.js" defer></script>
 <script src="app.js" defer></script>

@@ -12,7 +12,10 @@ param(
     [int]$PluType = 1,
     [int]$Ingredient = 0,
     [int]$SellBy = 366,
-    [string]$NameB64 = ""
+    [string]$NameB64 = "",
+    [switch]$IcerikListe,
+    [switch]$IcerikYaz,
+    [string]$TextB64 = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -49,6 +52,36 @@ try {
         }
         $r.Close()
         Write-Output "OK liste"
+        exit 0
+    }
+    if ($IcerikListe) {
+        $cmd = $conn.CreateCommand()
+        $cmd.CommandText = "SELECT Code, IngText FROM TbIngredient ORDER BY Code"
+        $r = $cmd.ExecuteReader()
+        while ($r.Read()) {
+            $t = if ($r["IngText"] -is [DBNull]) { "" } else { [string]$r["IngText"] }
+            Write-Output ("ING`t{0}`t{1}" -f [int]$r["Code"], [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($t)))
+        }
+        $r.Close()
+        Write-Output "OK icerik-liste"
+        exit 0
+    }
+    if ($IcerikYaz) {
+        if ($Item -le 0 -or $Item -gt 9999) { Write-Output "ERR kod-gecersiz"; exit 4 }
+        $metin = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($TextB64))
+        $cmd = $conn.CreateCommand()
+        $cmd.CommandText = "UPDATE TbIngredient SET IngText = @t WHERE Code = @c"
+        [void]$cmd.Parameters.AddWithValue("@t", $metin)
+        [void]$cmd.Parameters.AddWithValue("@c", $Item)
+        $n = $cmd.ExecuteNonQuery()
+        if ($n -eq 0) {
+            $cmd = $conn.CreateCommand()
+            $cmd.CommandText = "INSERT INTO TbIngredient (Code, IngText) VALUES (@c, @t)"
+            [void]$cmd.Parameters.AddWithValue("@c", $Item)
+            [void]$cmd.Parameters.AddWithValue("@t", $metin)
+            $n = $cmd.ExecuteNonQuery()
+            Write-Output "OK icerik-eklendi $n"
+        } else { Write-Output "OK icerik-guncellendi $n" }
         exit 0
     }
     if ($Ekle) {

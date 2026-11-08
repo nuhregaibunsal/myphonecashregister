@@ -1,10 +1,11 @@
-const CACHE = "fiyatgor-v28";
+const CACHE = "fiyatgor-v29";
 const FILES = [
   "./",
   "index.html",
   "styles.css",
   "app.js",
   "scale.js",
+  "icerik.js",
   "etiket-duzen.js",
   "etiket.js",
   "ocr.js",

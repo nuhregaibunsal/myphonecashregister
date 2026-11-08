@@ -9,9 +9,10 @@
 
 - [ ] Ürün eklerken özel kodlar: Tür (KOD1, terazide "Terazilikler"), üretim yeri (KOD10), kayıt no (KOD6) formda; Sınıf, Grup, 4-ÖK, 5-ÖK, Marka, Renk "Gelişmiş" altında. Listeler F0101TBLSTOKKODTAN (CATEGORY = KOD no), yeni değer listeye eklenir. Mevcut ürünün özel kodları Fiyat sekmesinde değiştirilebilir. Üretim yeri TURKIYE ise kayıt no varsayılan TR-41-K-033887. izin.sql tekrar çalıştırılmalı.
 
+- [ ] İçerik sekmesi (CL TbIngredient: Code, IngText): ara/aç/yeni (ilk boş = en büyük kod + 1), 3 bölüm (içindekiler, alerjen listesi içerir/eser, besin değerleri kutuları), kayıt no sabit TR-41-K-033887, önizleme, CL'ye kaydet. Yazıldı, denenecek. Paket terazilerine (192.168.1.153, 192.168.1.204) otomatik gönderim Wireshark yakalamasından sonra eklenecek.
+
 ### Yapılacak
 - [ ] Var olan ürünlere telefondan yeni birim ekleme (örnek: KG ürününe 250 gr / 500 gr paket birimi, ağırlık ve barkodla). Vega'nın birim ekleme şekli (F0101TBLBIRIMLEREX satırı) incelenecek.
-- [ ] İçindekiler (CL Works → Veri → İçerik, sadece CL ve 2 paket terazisi): telefonda 3 bölüm. İçindekiler (başlık otomatik), Alerjen uyarısı (her kelime otomatik ~2 kalın), besin değerleri ayrı kutularda (boş bırakılan satır yazılmaz). Kod = ilk boş kod. Kaydedip yalnız paket terazilerine gönderme. Paket terazileri 192.168.1.153 ve 192.168.1.204. Kayıt no sabit TR-41-K-033887, tablo satırlarında tek boşluk. Alerjen için 14 zorunlu alerjenden seçim listesi (içerir / eser miktarda içerebilir). Önce CL tablosu TbIngredient (canli/cl-icerik-kesif.ps1) ve gönderim paketi (Wireshark) incelenecek.
 - [ ] Fiyat sorgu sayfası: kamera sürekli açık, okutulan ürünün adı ve fiyatı büyük yazılır. "Düzenle" ile fiyat değiştirme paneli açılır; panel elle ya da 5 saniye sonra kendiliğinden kapanır, açıkken yeni barkod okunursa yeni ürün gelir.
 - [ ] Telefondan stok girişi (mal kabul): ürünü okutup gelen miktarı Vega'ya işleme. Vega'nın stok girişini nasıl kaydettiği incelenecek.
 

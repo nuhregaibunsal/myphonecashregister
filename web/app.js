@@ -120,6 +120,7 @@
   function updatePriceTab() {
     $("tabFiyatBtn").hidden = !canEditPrice;
     $("tabEkleBtn").hidden = !canEditPrice;
+    $("tabIcerikBtn").hidden = !canEditPrice;
     $("guncelleCard").hidden = !live;
     if (canEditPrice) loadLists();
   }
@@ -450,6 +451,137 @@
       msg.textContent = "Terazi ürünleri okunamadı: " + e.message;
     }
     $("tKodBtn").disabled = false;
+  }
+
+  let icerikler = null, icerikKod = 0, icerikYeni = false;
+
+  function iMsg(text, kind) { $("iMsg").textContent = text || ""; $("iMsg").className = "msg " + (kind || ""); }
+  function iKayitMsg(text, kind) { $("iKayitMsg").textContent = text || ""; $("iKayitMsg").className = "msg " + (kind || ""); }
+
+  async function loadIcerikler() {
+    iMsg("İçerikler okunuyor…");
+    try {
+      const res = await fetch("api/icerik", { cache: "no-store" });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.ok) throw new Error(j.error || ("HTTP " + res.status));
+      icerikler = j.icerikler || [];
+      iMsg(icerikler.length + " içerik var. Kod ya da kelimeyle ara, ya da yeni içerik oluştur.");
+    } catch (e) {
+      icerikler = null;
+      iMsg("İçerikler okunamadı: " + e.message, "err");
+    }
+  }
+
+  const icerikOzet = m => String(m || "").split(/\r?\n/)[0].replace(/~2/g, "").slice(0, 90);
+
+  function icerikAra(q) {
+    const ul = $("iSuggest");
+    ul.innerHTML = "";
+    if (!icerikler) return;
+    q = String(q || "").trim();
+    if (!q) return;
+    const n = q.toLocaleLowerCase("tr-TR");
+    const hits = /^\d+$/.test(q) ? icerikler.filter(x => String(x.kod) === q) : icerikler.filter(x => x.metin.toLocaleLowerCase("tr-TR").replace(/~2/g, "").includes(n)).slice(0, 15);
+    if (!hits.length) { iMsg("Bulunamadı.", "err"); return; }
+    iMsg("");
+    if (hits.length === 1 && /^\d+$/.test(q)) { icerikAc(hits[0], false); return; }
+    hits.forEach(x => {
+      const li = document.createElement("li");
+      li.textContent = x.kod + " · " + icerikOzet(x.metin);
+      li.onclick = () => { ul.innerHTML = ""; icerikAc(x, false); };
+      ul.appendChild(li);
+    });
+  }
+
+  function icerikFormKur() {
+    const al = $("iAlerjen");
+    if (!al.childElementCount) {
+      Icerik.ALERJEN.forEach(([k, ad]) => {
+        const l = document.createElement("label");
+        l.innerHTML = '<span></span><select><option value="">—</option><option value="icerir">İçerir</option><option value="eser">Eser miktarda</option></select>';
+        l.querySelector("span").textContent = ad;
+        const sel = l.querySelector("select");
+        sel.id = "iA-" + k;
+        sel.onchange = icerikOnizle;
+        al.appendChild(l);
+      });
+      const bs = $("iBesin");
+      [["kj", "Enerji (kJ)"], ["kcal", "Enerji (kcal)"]].concat(Icerik.BESIN).forEach(([k, ad]) => {
+        const l = document.createElement("label");
+        l.innerHTML = '<span></span><input inputmode="decimal" autocomplete="off">';
+        l.querySelector("span").textContent = ad;
+        const inp = l.querySelector("input");
+        inp.id = "iB-" + k;
+        inp.oninput = icerikOnizle;
+        bs.appendChild(l);
+      });
+    }
+  }
+
+  function icerikDegerleri() {
+    const v = { icindekiler: $("iIcindekiler").value, kayit: $("iKayit").value, alerjenEk: $("iAlerjenEk").value, alerjen: {}, besin: {} };
+    Icerik.ALERJEN.forEach(([k]) => { const x = $("iA-" + k).value; if (x) v.alerjen[k] = x; });
+    ["kj", "kcal"].concat(Icerik.BESIN.map(b => b[0])).forEach(k => { v.besin[k] = $("iB-" + k).value.trim(); });
+    return v;
+  }
+
+  function icerikOnizle() {
+    $("iOnizle").innerHTML = Icerik.html(Icerik.olustur(icerikDegerleri()));
+  }
+
+  function icerikAc(x, yeni) {
+    icerikFormKur();
+    icerikKod = x.kod;
+    icerikYeni = yeni;
+    const v = Icerik.coz(x.metin || "");
+    $("iBaslik").textContent = (yeni ? "Yeni içerik · kod " : "İçerik kodu ") + x.kod;
+    $("iIcindekiler").value = v.icindekiler;
+    $("iKayit").value = v.kayit || Icerik.KAYIT;
+    $("iAlerjenEk").value = v.alerjenEk;
+    Icerik.ALERJEN.forEach(([k]) => { $("iA-" + k).value = v.alerjen[k] || ""; });
+    ["kj", "kcal"].concat(Icerik.BESIN.map(b => b[0])).forEach(k => { $("iB-" + k).value = v.besin[k] || ""; });
+    $("iUyari").hidden = !v.taninmayan.length;
+    $("iUyari").textContent = v.taninmayan.length ? "Şu satırlar tanınmadı, kaydedersen silinir: " + v.taninmayan.map(t => t.replace(/~2/g, "")).join(" / ") : "";
+    $("iPin").value = pinCache && Date.now() - pinAt < 10 * 60000 ? pinCache : "";
+    iKayitMsg("");
+    $("iCard").hidden = false;
+    icerikOnizle();
+    setTimeout(() => $("iCard").scrollIntoView({ behavior: "smooth" }), 50);
+  }
+
+  function icerikYeniAc() {
+    if (!icerikler) { iMsg("İçerikler henüz okunmadı.", "err"); return; }
+    const kod = icerikler.reduce((m, x) => Math.max(m, x.kod), 0) + 1;
+    icerikAc({ kod, metin: "" }, true);
+  }
+
+  async function icerikKaydet() {
+    const v = icerikDegerleri();
+    if (!v.icindekiler.trim()) { iKayitMsg("İçindekileri yaz.", "err"); return; }
+    const pin = String($("iPin").value).trim();
+    if (!/^\d{4,8}$/.test(pin)) { iKayitMsg("PIN 4-8 rakam olmalı.", "err"); return; }
+    const metin = Icerik.olustur(v);
+    $("iKaydet").disabled = true;
+    iKayitMsg("Kaydediliyor…");
+    try {
+      const res = await fetch("api/icerik", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kod: icerikKod, metin, pin }) });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok && j.ok) {
+        pinCache = pin; pinAt = Date.now();
+        const eski = icerikler && icerikler.find(x => x.kod === icerikKod);
+        if (eski) eski.metin = metin; else if (icerikler) icerikler.push({ kod: icerikKod, metin });
+        icerikYeni = false;
+        $("iBaslik").textContent = "İçerik kodu " + icerikKod;
+        $("iUyari").hidden = true;
+        iKayitMsg("CL'ye kaydedildi (kod " + icerikKod + "). Terazilere göndermek için şimdilik CL Works'te bu içeriği işaretleyip paket terazilerine Gönder'e bas.", "ok");
+      } else {
+        if (res.status === 401) { pinCache = ""; $("iPin").value = ""; }
+        iKayitMsg(j.error || ("Kaydedilemedi (" + res.status + ")"), "err");
+      }
+    } catch (e) {
+      iKayitMsg("Kasa bilgisayarına ulaşılamadı.", "err");
+    }
+    $("iKaydet").disabled = false;
   }
 
   const kodNorm = v => String(v || "").toLocaleUpperCase("tr-TR").replace(/[^0-9A-ZÇĞİÖŞÜ]/g, "").replace(/^([A-ZÇĞİÖŞÜ]*)0+(?=\d)/, "$1");
@@ -1346,6 +1478,7 @@
     document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
     stopScan();
     if (name === "urunler") renderList();
+    if (name === "icerik" && canEditPrice && !icerikler) loadIcerikler();
     if (name === "ekle" && canEditPrice && (!$("aBirim").options.length || !$("aKdv").options.length)) loadLists();
   }
 
@@ -1540,6 +1673,12 @@
     $("fSearch").oninput = renderPriceSuggest;
     $("fSave").onclick = savePrice;
     $("tKodBtn").onclick = toggleSameCodes;
+    $("iForm").onsubmit = e => { e.preventDefault(); icerikAra($("iAra").value); };
+    $("iAra").oninput = () => { if (!/^\d+$/.test($("iAra").value.trim())) icerikAra($("iAra").value); };
+    $("iYeni").onclick = icerikYeniAc;
+    $("iVazgec").onclick = () => { $("iCard").hidden = true; };
+    $("iKaydet").onclick = icerikKaydet;
+    ["iIcindekiler", "iKayit", "iAlerjenEk"].forEach(id => { $(id).oninput = icerikOnizle; });
     $("eOnizle").onclick = etiketOnizle;
     $("eYazdir").onclick = etiketYazdir;
     $("eBirim").onchange = () => { eCanvas = null; $("eResim").hidden = true; eMsg(""); };
