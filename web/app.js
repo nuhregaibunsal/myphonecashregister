@@ -247,7 +247,9 @@
         renderPriceLog();
         const ad = unitData.ad;
         clearPriceSel();
-        fMsg(ad + ": " + tl(main.fiyat) + " → " + tl(round2(yeni)) + (real.length > 1 ? " (" + real.length + " birim)" : "") + " kasaya kaydedildi", "ok");
+        let msg = ad + ": " + tl(main.fiyat) + " → " + tl(round2(yeni)) + (real.length > 1 ? " (" + real.length + " birim)" : "") + " kasaya kaydedildi";
+        if (j.teraziMesaj) msg += ". " + j.teraziMesaj;
+        fMsg(msg, "ok");
         await saveProducts();
         syncLive();
         return;

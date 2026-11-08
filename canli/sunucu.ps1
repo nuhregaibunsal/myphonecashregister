@@ -154,6 +154,33 @@ function Get-Units([int]$birimInd) {
     return ,([System.Text.Encoding]::UTF8.GetBytes($sb.ToString()))
 }
 
+$clFile = Join-Path $root "cl.txt"
+
+function Get-CLMdb {
+    try { if (Test-Path $clFile) { $p = ([System.IO.File]::ReadAllText($clFile)).Trim(); if ($p -and (Test-Path -LiteralPath $p)) { return $p } } } catch { }
+    return ""
+}
+
+function Invoke-CL([int]$plu, [decimal]$price) {
+    $mdb = Get-CLMdb
+    if (-not $mdb) { return $null }
+    $helper = Join-Path $root "cl-yaz.ps1"
+    if (-not (Test-Path $helper)) { return "ERR yardimci-yok" }
+    $ps32 = Join-Path $env:SystemRoot "SysWOW64\WindowsPowerShell\v1.0\powershell.exe"
+    if (-not (Test-Path $ps32)) { $ps32 = "powershell.exe" }
+    try {
+        $out = & $ps32 -NoProfile -ExecutionPolicy Bypass -File $helper -Mdb $mdb -Plu $plu -Price $price 2>&1
+        return ([string](@($out) | Where-Object { $_ } | Select-Object -Last 1)).Trim()
+    } catch {
+        return "ERR $($_.Exception.Message)"
+    }
+}
+
+function TeraziPlu([string]$stokKodu) {
+    if ($stokKodu -match '(?i)TRZ[^0-9]*0*([0-9]+)') { return [int]$Matches[1] }
+    return 0
+}
+
 function Set-Price($ctx) {
     $b = Read-JsonBody $ctx
     $pinState = Test-Pin ([string]$b["pin"])
@@ -197,7 +224,32 @@ function Set-Price($ctx) {
     $line = "{0:yyyy-MM-dd HH:mm:ss};FIYAT;{1};{2};{3};{4}" -f (Get-Date), $stok, ([string]$b["ad"]).Replace(";", " "), ($done -join " "), $ip
     Add-Content -Path $changeLog -Value $line -Encoding UTF8
     Log "Fiyat degisti: stok $stok, $($done -join ' ') ($ip)"
-    SendJson $ctx 200 @{ ok = $true; adet = [int]$done.Count }
+
+    $teraziMesaj = ""
+    if (Get-CLMdb) {
+        try {
+            $q = New-Object System.Data.SqlClient.SqlConnection($connStr)
+            $q.Open()
+            $qc = $q.CreateCommand()
+            $qc.CommandText = "SELECT s.STOKKODU, CASE WHEN ISNULL(b.SATISFIYATI1,0)>0 THEN b.SATISFIYATI1 ELSE ISNULL(b.SATISFIYATI,0) END AS KGFIYAT FROM dbo.F0101TBLSTOKLAR s JOIN dbo.F0101TBLBIRIMLEREX b ON b.IND = s.ANABIRIM WHERE s.IND = @s"
+            [void]$qc.Parameters.AddWithValue("@s", $stok)
+            $rr = $qc.ExecuteReader()
+            $sk = ""; $kg = [decimal]0
+            if ($rr.Read()) { $sk = [string]$rr["STOKKODU"]; $kg = [decimal]$rr["KGFIYAT"] }
+            $rr.Close(); $q.Close()
+            $plu = TeraziPlu $sk
+            if ($plu -gt 0 -and $kg -gt 0) {
+                $cl = Invoke-CL $plu $kg
+                Log "CL yazma: PLU $plu, fiyat $kg -> $cl"
+                if ($cl -like "OK *") {
+                    $n = ($cl -split " ")[1]
+                    if ([int]$n -ge 1) { $teraziMesaj = "Terazi fiyati da guncellendi (PLU $plu). CL Works'u acip Gonder'e basin." }
+                    else { $teraziMesaj = "Terazide PLU $plu bulunamadi, terazi fiyati degismedi." }
+                } elseif ($cl) { $teraziMesaj = "Terazi guncellenemedi." }
+            }
+        } catch { Log "CL yazma hatasi: $($_.Exception.Message)"; $teraziMesaj = "Terazi guncellenemedi." }
+    }
+    SendJson $ctx 200 @{ ok = $true; adet = [int]$done.Count; teraziMesaj = [string]$teraziMesaj }
 }
 
 function J([string]$v) { return [System.Web.HttpUtility]::JavaScriptStringEncode($v, $true) }

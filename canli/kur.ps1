@@ -84,6 +84,20 @@ try {
         }
     }
 
+    Step "Terazi (CL Works) veritabani yolu"
+    $clTxt = "$dir\cl.txt"
+    $mevcut = ""
+    if (Test-Path $clTxt) { $mevcut = (Get-Content $clTxt -Raw).Trim() }
+    if ($mevcut) { Write-Host "   Kayitli: $mevcut" -ForegroundColor Gray }
+    Write-Host "   Terazi fiyatlarini da guncellemek icin CL Works veritabaninin (.mdb) tam yolunu yapistirin." -ForegroundColor Gray
+    Write-Host "   Ornek: C:\Users\User\Desktop\duzeltme.mdb  (Bos birakip Enter: terazi guncelleme kapali / mevcut kalir)" -ForegroundColor Gray
+    $clYol = Read-Host "   CL Works mdb yolu"
+    if ($clYol) {
+        $clYol = $clYol.Trim('"')
+        if (Test-Path -LiteralPath $clYol) { [System.IO.File]::WriteAllText($clTxt, $clYol, (New-Object System.Text.UTF8Encoding($false))); Ok "Terazi veritabani ayarlandi" }
+        else { Warn "Bu yolda dosya yok, terazi guncelleme ayarlanmadi: $clYol" }
+    } elseif (-not $mevcut) { Ok "Terazi guncelleme kapali (CL Works yolu verilmedi)" }
+
     Step "Guvenli baglanti sertifikasi hazirlaniyor"
     $cert = Get-ChildItem Cert:\LocalMachine\My | Where-Object { $_.FriendlyName -eq "FiyatGor" -and $_.NotAfter -gt (Get-Date).AddDays(30) } | Select-Object -First 1
     if (-not $cert) {
