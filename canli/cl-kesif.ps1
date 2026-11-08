@@ -54,15 +54,25 @@ foreach ($f in ($files | Sort-Object LastWriteTime -Descending | Select-Object -
     }
     if (-not $conn) { Say "Acilamadi: $err" Red; continue }
     try {
-        $tables = $conn.GetSchema("Tables") | Where-Object { $_.TABLE_TYPE -eq "TABLE" } | ForEach-Object { $_.TABLE_NAME }
+        $tableRows = @()
+        try { $tableRows = @($conn.GetOleDbSchemaTable([System.Data.OleDb.OleDbSchemaGuid]::Tables, $null)) } catch { Say "  Tablo listesi (yontem 1) alinamadi: $($_.Exception.Message)" DarkGray }
+        if (-not $tableRows.Count) {
+            try { $tableRows = @($conn.GetSchema("Tables")) } catch { Say "  Tablo listesi (yontem 2) alinamadi: $($_.Exception.Message)" DarkGray }
+        }
+        $tables = @($tableRows | Where-Object { $t = [string]$_.TABLE_TYPE; $n = [string]$_.TABLE_NAME; $t -notmatch "(?i)system|access" -and $n -notlike "MSys*" -and $n -notlike "~*" } | ForEach-Object { [string]$_.TABLE_NAME })
+        Say ("  Toplam tablo: " + $tableRows.Count + ", kullanici tablosu: " + $tables.Count)
+        if (-not $tables.Count -and $tableRows.Count) {
+            Say "  Tum tablolar (tip ile):"
+            $tableRows | ForEach-Object { Say ("    " + [string]$_.TABLE_NAME + "  [" + [string]$_.TABLE_TYPE + "]") }
+        }
         foreach ($t in $tables) {
-            $cols = $conn.GetSchema("Columns", [string[]]@($null, $null, $t, $null)) | Sort-Object { [int]$_.ORDINAL_POSITION } | ForEach-Object { $_.COLUMN_NAME }
-            $n = "?"
-            try { $cmd = $conn.CreateCommand(); $cmd.CommandText = "SELECT COUNT(*) FROM [$t]"; $n = $cmd.ExecuteScalar() } catch { }
-            Say "`n[$t] $n satir" Yellow
-            Say ("  Sutunlar: " + ($cols -join ", "))
-            if ($n -ne "?" -and [int]$n -gt 0) {
-                try {
+            try {
+                $cols = @($conn.GetOleDbSchemaTable([System.Data.OleDb.OleDbSchemaGuid]::Columns, @($null, $null, $t, $null)) | Sort-Object { [int]$_.ORDINAL_POSITION } | ForEach-Object { [string]$_.COLUMN_NAME })
+                $n = "?"
+                try { $cmd = $conn.CreateCommand(); $cmd.CommandText = "SELECT COUNT(*) FROM [$t]"; $n = $cmd.ExecuteScalar() } catch { }
+                Say "`n[$t] $n satir" Yellow
+                Say ("  Sutunlar: " + ($cols -join ", "))
+                if ($n -ne "?" -and [int]$n -gt 0) {
                     $cmd = $conn.CreateCommand()
                     $cmd.CommandText = "SELECT TOP 3 * FROM [$t]"
                     $rd = $cmd.ExecuteReader()
@@ -73,10 +83,10 @@ foreach ($f in ($files | Sort-Object LastWriteTime -Descending | Select-Object -
                         $i++
                     }
                     $rd.Close()
-                } catch { Say "  ornek okunamadi: $($_.Exception.Message)" DarkGray }
-            }
+                }
+            } catch { Say "  [$t] okunamadi: $($_.Exception.Message)" DarkGray }
         }
-    } finally { $conn.Close() }
+    } catch { Say "  Okuma hatasi: $($_.Exception.Message)" Red } finally { $conn.Close() }
 }
 
 $target = if (Test-Path "C:\FiyatGor") { "C:\FiyatGor\cl-kesif.txt" } else { Join-Path ([Environment]::GetFolderPath("Desktop")) "cl-kesif.txt" }
