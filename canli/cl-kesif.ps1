@@ -27,14 +27,24 @@ if (-not $files.Count) {
 foreach ($f in ($files | Sort-Object LastWriteTime -Descending | Select-Object -First 4)) {
     Say "`n===== $($f.FullName) =====" Cyan
     $conn = $null
-    foreach ($prov in @("Microsoft.ACE.OLEDB.16.0", "Microsoft.ACE.OLEDB.12.0", "Microsoft.Jet.OLEDB.4.0")) {
-        try {
-            $c = New-Object System.Data.OleDb.OleDbConnection("Provider=$prov;Data Source=$($f.FullName);Mode=Read;Persist Security Info=False;")
-            $c.Open()
-            $conn = $c
-            Say "Acildi ($prov)" Green
-            break
-        } catch { $err = $_.Exception.Message }
+    $pw = ""
+    for ($deneme = 0; $deneme -lt 2 -and -not $conn; $deneme++) {
+        $pwPart = if ($pw) { "Jet OLEDB:Database Password=$pw;" } else { "" }
+        foreach ($prov in @("Microsoft.ACE.OLEDB.16.0", "Microsoft.ACE.OLEDB.12.0", "Microsoft.Jet.OLEDB.4.0")) {
+            try {
+                $c = New-Object System.Data.OleDb.OleDbConnection("Provider=$prov;Data Source=$($f.FullName);Mode=Read;Persist Security Info=False;$pwPart")
+                $c.Open()
+                $conn = $c
+                Say "Acildi ($prov)" Green
+                break
+            } catch { $err = $_.Exception.Message }
+        }
+        if (-not $conn -and $deneme -eq 0 -and ($err -match "(?i)password|parola|sifre|not a valid")) {
+            Write-Host "  Bu veritabani sifreli. Sifreyi biliyorsaniz yazin, bilmiyorsaniz bos birakip Enter'a basin." -ForegroundColor Yellow
+            $sec = Read-Host "  Veritabani sifresi" -AsSecureString
+            $pw = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec))
+            if (-not $pw) { break }
+        }
     }
     if (-not $conn) { Say "Acilamadi: $err" Red; continue }
     try {
