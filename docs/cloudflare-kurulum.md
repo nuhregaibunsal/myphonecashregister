@@ -12,7 +12,7 @@ Cloudflare'in ekran adları zamanla değişebilir. Bir adım tutmazsa ekran gör
 3. Satın aldıktan sonra alan adının ayarlarında **Auto-Renew** kapalı olsun.
 
 ## B. Zero Trust (ücretsiz plan)
-4. Sol menü **Zero Trust**. Takım adı isterse kısa bir ad yazın (ör. `unsal`). Plan olarak **Free** seçin. Kart bilgisi isterse ücretsiz planda para çekilmez.
+4. Sol menü **Zero Trust**. Takım adı isterse kısa ve nötr bir ad yazın (ör. `tezgah`). Plan olarak **Free** seçin. Kart bilgisi isterse ücretsiz planda para çekilmez.
 
 ## C. Tünel (dükkan kapalıyken, kasa bilgisayarında)
 5. Zero Trust → **Networks → Tunnels → Create a tunnel** → **Cloudflared** → ad: `dukkan` → işletim sistemi **Windows**.
