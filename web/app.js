@@ -583,7 +583,18 @@
     if (!q) return;
     const n = q.toLocaleLowerCase("tr-TR");
     const hits = /^\d+$/.test(q) ? icerikler.filter(x => String(x.kod) === q) : icerikler.filter(x => x.metin.toLocaleLowerCase("tr-TR").replace(/~2/g, "").includes(n)).slice(0, 15);
-    if (!hits.length) { iMsg("Bulunamadı.", "err"); return; }
+    if (!hits.length) {
+      if (/^\d+$/.test(q) && Number(q) > 0 && Number(q) <= 9999) {
+        iMsg(q + " numaralı içerik yok.");
+        const li = document.createElement("li");
+        li.textContent = "＋ " + q + " koduyla yeni içerik oluştur";
+        li.onclick = () => { ul.innerHTML = ""; iMsg(""); icerikAc({ kod: Number(q), metin: "" }, true); };
+        ul.appendChild(li);
+        return;
+      }
+      iMsg("Bulunamadı.", "err");
+      return;
+    }
     iMsg("");
     if (hits.length === 1 && /^\d+$/.test(q)) { icerikAc(hits[0], false); return; }
     hits.forEach(x => {

@@ -2,8 +2,7 @@
 
 ## Bekleyen
 ### Dükkanda denenecek (yazıldı)
-- [ ] Wireshark: CL'den içerik 2'yi (kısa metin) 192.168.1.204'e gönderirken yakala. Tahmin: W30F01,0002L029:X=00.D=01E. ... XOR 0x06, 58 bayt.
-- [ ] İçerik gönderimi (İçerik → Kaydet, "paket terazilerine gönder" işaretli): önce 10'un üstünde bir kodla (ör. 24) dene, terazide içeriği kontrol et. Protokol W30, içerik 1 ve 3 ile birebir doğrulandı.
+- [ ] İçerik gönderimi: İçerik sekmesinde 282 yaz → "282 koduyla yeni içerik oluştur" → içindekiler "abcç" → Kaydet (gönder işaretli). Wireshark'la 192.168.1.204 yakala (tahmin: W30F01,011AL02D:X=00.D=022. ... XOR 0xD0, 62 bayt). CL'de TEST (PLU 386) içerik no 282 yapıp teraziye gönder, paket terazisinden TEST etiketi bas; abcç çıkarsa kod ve kısa metin doğrulanır.
 - [ ] Etiket yeni hali (kalın/büyük yazılar, Türkiye yazımında Yerli Üretim logosu) tekrar basılıp bakılacak.
 - [ ] Fiyat sorguda bulunamayan ürün için ＋ Ekle düğmesi.
 
@@ -16,6 +15,7 @@
 
 ## Tamamlandı
 - [x] Alt menü sekmeleri Ayarlar'dan açılıp kapatılabilir (telefon başına)
+- [x] İçerik sekmesinde olmayan kodu yazınca o kodla yeni içerik oluşturma
 - [x] Fiyat sorgu ayrı sekme (🔎 Sorgu), sekmeye girince kamera kendiliğinden açılır
 - [x] Etiket yazdırma (Sbarco), dükkanda basıldı
 - [x] Sabit fiyatlı terazi ürünü ekleme, özel kodlar, fiyat sorgu, birim ekleme, eklerken içerik seçimi: denendi
