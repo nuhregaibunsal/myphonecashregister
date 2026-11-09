@@ -8,7 +8,7 @@ Cloudflare'in ekran adları zamanla değişebilir. Bir adım tutmazsa ekran gör
 
 ## A. Hesap ve alan adı (telefondan da yapılabilir)
 1. https://dash.cloudflare.com adresinden hesap açın. Şifreyi kimseyle paylaşmayın.
-2. Sol menü **Domain Registration → Register Domains**. İstediğiniz adı arayın (ör. `unsalkuruyemis.com`), 1 yıllık satın alın.
+2. Sol menü **Domains → Registrations** → **Register domain** düğmesi (eski ekranlarda Domain Registration → Register Domains). İstediğiniz adı arayın (ör. `unsalkuruyemis.com`), 1 yıllık satın alın.
 3. Satın aldıktan sonra alan adının ayarlarında **Auto-Renew** kapalı olsun.
 
 ## B. Zero Trust (ücretsiz plan)
