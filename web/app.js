@@ -736,7 +736,11 @@
       fill($("aFiyatAdi"), j.fiyatAdi, x => x, x => x);
       fill($("aKdv"), j.kdv, x => x.ind, x => x.ad + " %" + Number(x.oran).toLocaleString("tr-TR"));
       OZEL.forEach(n => fill($("dlOk" + n), (j.ozel || {})[n] || [], x => x, x => x));
-      resetAddForm();
+      if (!$("aBarkod").value.trim() && !$("aAd").value.trim()) resetAddForm();
+      else {
+        if ([...$("aBirim").options].some(o => o.value === "ADET") && !$("aTerazi").checked) $("aBirim").value = "ADET";
+        if ([...$("aFiyatAdi").options].some(o => o.value === "FIYAT")) $("aFiyatAdi").value = "FIYAT";
+      }
       if (j.hatalar && j.hatalar.length) aMsg("Bazı listeler okunamadı: " + j.hatalar.join(" | "), "err");
     } catch (e) {
       aMsg("Seçim listeleri okunamadı: " + e.message, "err");
@@ -1063,7 +1067,7 @@
     $("aAd").focus();
   }
 
-  let sorguTimer = null, sorguUrun = null;
+  let sorguTimer = null, sorguUrun = null, sorguKod = "";
 
   function sorguKapat() {
     clearTimeout(sorguTimer);
@@ -1084,10 +1088,13 @@
       $("sorguFiyat").textContent = "—";
       $("sorguAlt").textContent = code;
       $("sorguDuzenle").hidden = true;
+      sorguKod = code;
+      $("sorguEkle").hidden = !canEditPrice || !!(r && r.scale);
     } else {
       beep(true);
       const p = r.product;
       sorguUrun = p;
+      $("sorguEkle").hidden = true;
       $("sorguAd").textContent = p.ad;
       $("sorguFiyat").textContent = tl(p.fiyat);
       let alt = p.birim ? lower(p.birim) + " fiyatı" : "";
@@ -1105,6 +1112,20 @@
     void bar.offsetWidth;
     bar.style.animation = "";
     sorguTimer = setTimeout(sorguKapat, 5000);
+  }
+
+  function sorguEkle() {
+    const code = Scale.normCode(sorguKod);
+    if (!code) return;
+    sorguKapat();
+    stopScan();
+    switchTab("ekle");
+    resetAddForm();
+    $("aBarkod").value = code;
+    kodTouched = false;
+    checkBarcode();
+    aMsg("");
+    setTimeout(() => $("aAd").focus(), 100);
   }
 
   function sorguDuzenle() {
@@ -1821,6 +1842,7 @@
     $("startSorgu").onclick = () => { scanMode = "sorgu"; startScan(); window.scrollTo(0, 0); };
     $("sorguKapat").onclick = sorguKapat;
     $("sorguDuzenle").onclick = sorguDuzenle;
+    $("sorguEkle").onclick = sorguEkle;
     $("fScan").onclick = () => { scanMode = "fiyat"; fMsg(""); startScan(); };
     $("fForm").onsubmit = e => { e.preventDefault(); priceFind($("fSearch").value); };
     $("fSearch").oninput = renderPriceSuggest;

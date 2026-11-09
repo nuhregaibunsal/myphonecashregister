@@ -9,10 +9,12 @@
     ["EtiketKalin", "archivo-black-latin-ext-400-normal.woff2", "400", EXT],
     ["EtiketSerif", "tinos-latin-400-normal.woff2", "400", LATIN],
     ["EtiketSerif", "tinos-latin-ext-400-normal.woff2", "400", EXT],
+    ["EtiketSerifKalin", "tinos-latin-700-normal.woff2", "400", LATIN],
+    ["EtiketSerifKalin", "tinos-latin-ext-700-normal.woff2", "400", EXT],
     ["EtiketSans", "arimo-latin-700-normal.woff2", "700", LATIN],
     ["EtiketSans", "arimo-latin-ext-700-normal.woff2", "700", EXT]
   ];
-  const FAM = { kalin: "EtiketKalin", serif: "EtiketSerif", sans: "EtiketSans" };
+  const FAM = { kalin: "EtiketKalin", serif: "EtiketSerif", serifKalin: "EtiketSerifKalin", sans: "EtiketSans" };
   let ready = null;
 
   function loadImg(src) {
@@ -180,7 +182,7 @@
     const img = await hazirla();
     const duzen = (secenek && secenek.duzen) || window.ETIKET_DUZEN;
     const d = degerler(v);
-    const yerli = d.kod10.trim().toLocaleUpperCase("tr-TR") === "TURKIYE";
+    const yerli = d.kod10.trim().toLocaleUpperCase("tr-TR").replace(/[İÜŞÇĞÖ]/g, c => ({ "İ": "I", "Ü": "U", "Ş": "S", "Ç": "C", "Ğ": "G", "Ö": "O" })[c]) === "TURKIYE";
     const PW = Math.round(duzen.sayfa.en * MM), PH = Math.round(duzen.sayfa.boy * MM);
     const c = document.createElement("canvas");
     c.width = PW; c.height = PH;
@@ -207,7 +209,7 @@
     const id = ctx.getImageData(0, 0, PW, PH);
     const p = id.data;
     for (let i = 0; i < p.length; i += 4) {
-      const k = (p[i] * 299 + p[i + 1] * 587 + p[i + 2] * 114) / 1000 < 150 ? 0 : 255;
+      const k = (p[i] * 299 + p[i + 1] * 587 + p[i + 2] * 114) / 1000 < 185 ? 0 : 255;
       p[i] = p[i + 1] = p[i + 2] = k; p[i + 3] = 255;
     }
     ctx.putImageData(id, 0, 0);
