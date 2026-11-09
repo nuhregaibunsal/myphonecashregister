@@ -117,7 +117,7 @@
   let priceSel = null;
   const priceLog = [];
 
-  const MENU = [["hesap", "🧮 Hesap", false], ["urunler", "📋 Ürünler", false], ["fiyat", "₺ Fiyat", true], ["ekle", "＋ Ekle", true], ["icerik", "🥜 İçerik", true]];
+  const MENU = [["hesap", "🧮 Hesap", false], ["sorgu", "🔎 Sorgu", false], ["urunler", "📋 Ürünler", false], ["fiyat", "₺ Fiyat", true], ["ekle", "＋ Ekle", true], ["icerik", "🥜 İçerik", true]];
 
   function menuUygula() {
     const gizli = store.get("gizliSekmeler", []);
@@ -1683,6 +1683,7 @@
     document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
     stopScan();
     if (name === "urunler") renderList();
+    if (name === "sorgu") { scanMode = "sorgu"; startScan(); window.scrollTo(0, 0); }
     if (name === "icerik" && canEditPrice && !icerikler) loadIcerikler();
     if (name === "ekle" && canEditPrice && (!$("aBirim").options.length || !$("aKdv").options.length)) loadLists();
   }

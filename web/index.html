@@ -48,9 +48,7 @@
     <div class="row">
       <button class="btn primary big" id="startScan" type="button">📷 Barkod Okut</button>
     </div>
-    <div class="row">
-      <button class="btn big" id="startSorgu" type="button">🔎 Fiyat Sorgu</button>
-    </div>
+
 
     <form class="row" id="manualForm" autocomplete="off">
       <input id="manualInput" inputmode="numeric" placeholder="Barkod yaz veya ürün ara" enterkeyhint="go">
@@ -69,6 +67,13 @@
       </div>
       <button class="btn danger" id="clearBasket" type="button">Temizle</button>
     </div>
+  </section>
+
+  <section id="tab-sorgu" class="tab">
+    <div class="row">
+      <button class="btn primary big" id="startSorgu" type="button">🔎 Fiyat Sorgu</button>
+    </div>
+    <p class="muted small">Kamera açık kalır, okuttuğun ürünün adı ve fiyatı büyük yazılır. Kart 5 saniye sonra kapanır.</p>
   </section>
 
   <section id="tab-urunler" class="tab">
@@ -356,6 +361,7 @@
 
 <nav class="tabs">
   <button data-tab="hesap" class="active" type="button">🧮<span>Hesap</span></button>
+  <button data-tab="sorgu" type="button">🔎<span>Sorgu</span></button>
   <button data-tab="urunler" type="button">📋<span>Ürünler</span></button>
   <button data-tab="fiyat" id="tabFiyatBtn" type="button" hidden>₺<span>Fiyat</span></button>
   <button data-tab="ekle" id="tabEkleBtn" type="button" hidden>＋<span>Ekle</span></button>

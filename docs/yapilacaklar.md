@@ -16,6 +16,7 @@
 
 ## Tamamlandı
 - [x] Alt menü sekmeleri Ayarlar'dan açılıp kapatılabilir (telefon başına)
+- [x] Fiyat sorgu ayrı sekme (🔎 Sorgu), sekmeye girince kamera kendiliğinden açılır
 - [x] Etiket yazdırma (Sbarco), dükkanda basıldı
 - [x] Sabit fiyatlı terazi ürünü ekleme, özel kodlar, fiyat sorgu, birim ekleme, eklerken içerik seçimi: denendi
 - [x] İçerik gönderim protokolü (W30) çözüldü
