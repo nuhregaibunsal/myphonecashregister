@@ -8,6 +8,7 @@
 - [ ] Stok girişi (📦 Stok sekmesi): okut / ara / terazi listesinden seç → adet × çarpan (varsayılan 1) → Vega'nın Hızlı Stok Tanımlama Ctrl+N'si gibi devir giriş fişi (DEVGIRBASLIK + DEVGIRHAREKET + STOKHAREKETLERI + DEPOENVANTER, belge tipi 90, fiş no A + 7 hane). izin.sql tekrar çalıştırılmalı. İlk deneme Çörek Otu Yağı'na 1 adet, Vega'nın kendi kayıtlarıyla yan yana karşılaştırılacak.
 
 ### Yapılacak
+- [ ] Yemeksepeti ve Trendyol entegrasyonu: siparişleri/ürün-fiyat-stok eşitlemesini kasa sunucusu üzerinden yapmak (Trendyol'un açık satıcı API'si var; Yemeksepeti iş ortağı onayı gerektirir). Ekranlar aynı uygulamaya eklenecek, ayrı masaüstü programı gerekmez.
 - [ ] Devir: yeni dönem açılınca (yılbaşı) önceki dönemde kalan miktarları tek tuşla yeni döneme devir giriş fişi olarak aktarma.
 
 ### Dükkan sahibi elle yapacak
