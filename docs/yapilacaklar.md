@@ -6,13 +6,13 @@
 - [ ] Fiyat sorguda bulunamayan ürün için ＋ Ekle düğmesi.
 
 ### Yapılacak
-- [ ] Mobil uygulama: Cloudflare Tunnel + Access ile https://app.tezgahpanel.com (alan adı alındı) (docs/cloudflare-kurulum.md). Alan adı .com, otomatik yenileme kapalı; bitişe 30 gün kala uygulamada uyarı (C:\FiyatGor\alanadi.txt). Telefonlarda "Ana ekrana ekle". Kasa için de aynı uygulama (masaüstü ayrı program gerekmez); ileride Trendyol/Yemeksepeti ekranları buna eklenecek.
 - [ ] Telefondan stok girişi (mal kabul): ürünü okutup gelen miktarı Vega'ya işleme. Vega'nın stok girişini nasıl kaydettiği incelenecek.
 
 ### Dükkan sahibi elle yapacak
 - [ ] CL'de aynı ürün kodlu ve fiyatı farklı ürünlerin temizliği (126 kod, 108'inde fiyat farklı; PLU 1000 ve 9994-9999 gibi kopyalar).
 
 ## Tamamlandı
+- [x] Mobil uygulama: Cloudflare Tunnel + Access ile https://app.tezgahpanel.com, telefona uygulama olarak yüklendi (docs/cloudflare-kurulum.md). Kalan: C:\FiyatGor\alanadi.txt (bitiş uyarısı), diğer kullanıcıların e-postaları, kasa bilgisayarında da uygulama olarak yükleme.
 - [x] İçerik gönderimi telefondan paket terazilerine (W30), içerik 1, 3 ve 282 ile birebir doğrulandı
 - [x] Okutulan barkod stok kodunda da aranır (Vega gibi)
 - [x] Alt menü sekmeleri Ayarlar'dan açılıp kapatılabilir (telefon başına)
