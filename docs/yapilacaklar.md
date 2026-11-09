@@ -2,6 +2,7 @@
 
 ## Bekleyen
 ### Dükkanda denenecek (yazıldı)
+- [ ] Wireshark: CL'den içerik 2'yi (kısa metin) 192.168.1.204'e gönderirken yakala. Tahmin: W30F01,0002L029:X=00.D=01E. ... XOR 0x06, 58 bayt.
 - [ ] İçerik gönderimi (İçerik → Kaydet, "paket terazilerine gönder" işaretli): önce 10'un üstünde bir kodla (ör. 24) dene, terazide içeriği kontrol et. Protokol W30, içerik 1 ve 3 ile birebir doğrulandı.
 - [ ] Etiket yeni hali (kalın/büyük yazılar, Türkiye yazımında Yerli Üretim logosu) tekrar basılıp bakılacak.
 - [ ] Fiyat sorguda bulunamayan ürün için ＋ Ekle düğmesi.
