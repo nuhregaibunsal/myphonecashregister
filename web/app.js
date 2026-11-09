@@ -78,15 +78,53 @@
 
   let live = false, liveTimer = null;
 
+  let baglantiHata = null, liveHazir = false, tekrarTimer = null;
+  const canliOrtam = () => /^https?:$/.test(location.protocol) && !/github\.io$/i.test(location.hostname);
+
+  function hataSinifla(h) {
+    const kod = h && h.kod ? " · kod " + h.kod : "";
+    if (h.tip === "oturum") return { baslik: "Oturumun süresi dolmuş", aciklama: "Sayfayı yenileyip e-posta koduyla yeniden giriş yap.", dugme: "Yeniden giriş", alt: "" };
+    if (h.tip === "zaman") return { baslik: "Kasa bilgisayarı yanıt vermiyor", aciklama: "Bilgisayar meşgul ya da çok yavaş. Birazdan kendiliğinden tekrar denenecek.", alt: "zaman aşımı" };
+    if (h.tip === "ag") return navigator.onLine === false
+      ? { baslik: "İnternet bağlantısı yok", aciklama: "Telefonun Wi-Fi ya da mobil verisini kontrol et.", alt: "çevrimdışı" }
+      : { baslik: "Kasa bilgisayarına ulaşılamıyor", aciklama: "Bilgisayar kapalı, internetten kopmuş ya da sunucu çalışmıyor olabilir.", alt: "ağ hatası" };
+    if (h.tip === "sql") return { baslik: "Kasa veritabanına bağlanılamadı", aciklama: "Vega'nın veritabanı (SQL Server) kapalı olabilir." + (h.mesaj ? " Ayrıntı: " + h.mesaj : ""), alt: "kod " + h.kod };
+    const k = Number(h.kod) || 0;
+    if (k === 401 || k === 403) return { baslik: "Oturumun süresi dolmuş", aciklama: "Sayfayı yenileyip e-posta koduyla yeniden giriş yap.", dugme: "Yeniden giriş", alt: "kod " + k };
+    if (k === 504 || k === 524) return { baslik: "Kasa bilgisayarı geç yanıt veriyor", aciklama: "Sunucu çalışıyor ama yanıt vermesi uzun sürdü. Birazdan tekrar denenecek.", alt: "kod " + k };
+    if (k >= 500) return { baslik: "Kasa bilgisayarına ulaşılamıyor", aciklama: "Sunucu kapalı ya da yeniden başlıyor olabilir. Bilgisayarın açık olduğundan emin ol.", alt: "kod " + k };
+    return { baslik: "Bağlantı hatası", aciklama: "Kasa bilgisayarından ürün listesi alınamadı.", alt: k ? "kod " + k : "" };
+  }
+
+  function baglantiGoster() {
+    const el = $("baglanti");
+    if (!baglantiHata || !canliOrtam()) { el.hidden = true; return; }
+    const m = hataSinifla(baglantiHata);
+    $("bgBaslik").textContent = m.baslik;
+    $("bgAciklama").textContent = m.aciklama;
+    const son = meta.updated && products.length ? "Fiyatlar telefondaki son listeden gösteriliyor (" + new Date(meta.updated).toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) + ")" : "Telefonda kayıtlı ürün listesi yok";
+    $("bgAlt").textContent = son + (m.alt ? " · " + m.alt : "");
+    $("bgDugme").textContent = m.dugme || "Tekrar dene";
+    $("bgDugme").onclick = m.dugme ? () => location.reload() : () => { $("bgDugme").disabled = true; startLive().finally(() => { $("bgDugme").disabled = false; }); };
+    el.hidden = false;
+  }
+
   async function syncLive() {
     if (!/^https?:$/.test(location.protocol)) return false;
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 10000);
     try {
-      const res = await fetch("api/urunler", { cache: "no-store", signal: ctrl.signal });
-      if (!res.ok || !/json/.test(res.headers.get("content-type") || "")) throw new Error(String(res.status));
+      let res;
+      try { res = await fetch("api/urunler", { cache: "no-store", signal: ctrl.signal }); }
+      catch (err) { throw { tip: err && err.name === "AbortError" ? "zaman" : "ag" }; }
+      const json = /json/.test(res.headers.get("content-type") || "");
+      if (!res.ok) {
+        const j = json ? await res.json().catch(() => null) : null;
+        throw j && j.error ? { tip: "sql", kod: res.status, mesaj: j.error } : { tip: "http", kod: res.status };
+      }
+      if (!json) throw { tip: "oturum", kod: res.status };
       const data = await res.json();
-      if (!Array.isArray(data.products)) throw new Error("liste yok");
+      if (!Array.isArray(data.products)) throw { tip: "http", kod: res.status };
       products = data.products.map(p => ({
         barkod: Scale.normCode(p.barkod),
         ad: String(p.ad || "").trim(),
@@ -98,10 +136,16 @@
       })).filter(p => p.ad);
       meta = { updated: data.updated || Date.now(), source: "Kasa bilgisayarı, canlı" };
       live = true;
+      baglantiHata = null;
+      baglantiGoster();
       await saveProducts();
+      renderInfo();
       return true;
     } catch (e) {
-      if (live) { live = false; renderInfo(); }
+      baglantiHata = e && e.tip ? e : { tip: "ag" };
+      live = false;
+      renderInfo();
+      baglantiGoster();
       return false;
     } finally {
       clearTimeout(t);
@@ -158,6 +202,7 @@
   function updatePriceTab() {
     menuUygula();
     menuAyarKur();
+    window.addEventListener("online", () => { if (!live) startLive(); });
     $("guncelleCard").hidden = !live;
     if (canEditPrice) loadLists();
   }
@@ -1345,18 +1390,26 @@
   }
 
   async function startLive() {
+    clearTimeout(tekrarTimer);
     if (await syncLive()) {
-      await loadRights();
-      updatePriceTab();
-      alanAdiKontrol();
-      renderInfo();
-      liveTimer = setInterval(syncLive, 60000);
-      document.addEventListener("visibilitychange", () => { if (!document.hidden) syncLive(); });
+      if (!liveHazir) {
+        liveHazir = true;
+        await loadRights();
+        updatePriceTab();
+        alanAdiKontrol();
+        renderInfo();
+        liveTimer = setInterval(syncLive, 60000);
+        document.addEventListener("visibilitychange", () => { if (!document.hidden) syncLive(); });
+      }
+      return true;
     }
+    if (!liveHazir && canliOrtam()) tekrarTimer = setTimeout(startLive, 20000);
+    return false;
   }
 
   function renderInfo() {
-    $("dbInfo").textContent = (live ? "● Canlı · " : "") + (products.length ? products.length + " ürün" : "Liste yok");
+    $("dbInfo").textContent = (live ? "● Canlı · " : (baglantiHata && canliOrtam() ? "● Bağlantı yok · " : "")) + (products.length ? products.length + " ürün" : "Liste yok");
+    $("dbInfo").classList.toggle("kopuk", !live && !!baglantiHata && canliOrtam());
     const d = meta.updated ? new Date(meta.updated).toLocaleString("tr-TR") : "-";
     $("dataStats").textContent = products.length + " ürün kayıtlı. Son güncelleme: " + d + (meta.source ? " (" + meta.source + ")" : "");
   }

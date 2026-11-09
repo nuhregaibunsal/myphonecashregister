@@ -15,13 +15,14 @@ Bu dosya her oturumun başında okunur. Bu projede neyin neden böyle olduğunu 
 - Kullanıcı çoğu zaman telefondan yazıyor; dükkan açıkken kasa bilgisayarında iş yapmak zor, ağır işler gece.
 
 ## Mimari
-- `web/`: PWA (vanilla JS, derleme yok). `app.js` ana mantık, `scale.js` terazi barkodu çözümü, `etiket.js` + `etiket-duzen.js` raf etiketi çizimi, `icerik.js` içerik metni oluştur/çöz, `ocr.js` (Tesseract), `sw.js` (her değişiklikte `CACHE` sürümünü artır: şu an `fiyatgor-v42`).
+- `web/`: PWA (vanilla JS, derleme yok). `app.js` ana mantık, `scale.js` terazi barkodu çözümü, `etiket.js` + `etiket-duzen.js` raf etiketi çizimi, `icerik.js` içerik metni oluştur/çöz, `ocr.js` (Tesseract), `sw.js` (her değişiklikte `CACHE` sürümünü artır: şu an `fiyatgor-v45`; sunucu 5xx ya da ağ hatasında sayfa önbellekten açılır, /api/ istekleri önbelleğe alınmaz).
 - `canli/sunucu.ps1`: Kasa bilgisayarında (Windows, `C:\FiyatGor`) zamanlanmış görev `FiyatGor` olarak çalışan PowerShell HttpListener HTTPS sunucusu, port 8443, kendinden imzalı sertifika. Açılışta GitHub `HEAD.zip`'ten kendini günceller; `sunucu.ps1` değiştiyse kendini yeni sürümle yeniden başlatır. `/api/guncelle` sadece web + ps1 kopyalar.
   - Yeniden başlatma komutu (yönetici PowerShell): `Stop-ScheduledTask FiyatGor; Start-ScheduledTask FiyatGor`
 - `canli/cl-yaz.ps1`, `cl-terazi-gonder.ps1`: 32-bit yardımcılar (Jet OLEDB 32-bit). Sunucu `SysWOW64\powershell.exe` ile çağırır; şifre `FG_CLPW` ortam değişkeni ile geçer (dosya: `C:\FiyatGor\clpw.txt`). CL mdb yolu `C:\FiyatGor\cl.txt` (Masaüstü `düzeltme.mdb`).
 - `canli/izin.sql`: SQL Server izinleri (Windows hesabı `DESKTOP-230C94K\User`). Yeni özellik yeni tabloya dokunuyorsa buraya ekle ve kullanıcıya SSMS'te tekrar çalıştırmasını söyle.
 - Diğer `C:\FiyatGor` dosyaları: `pin` (fiyat PIN hash), `alanadi.txt` (tezgahpanel.com, bitiş uyarısı için), `paket-terazi.txt` (opsiyonel), `donem.txt` (opsiyonel stok dönemi), `yazici.txt` (opsiyonel etiket yazıcısı), `degisiklikler.log`, `sunucu.log`.
 - Erişim: Tailscale `https://100.70.71.9:8443` ve Cloudflare Tunnel + Access `https://app.tezgahpanel.com` (alan adı Cloudflare'de, otomatik yenileme KAPALI; tünel kasa bilgisayarında hizmet; Access e-posta kodu, oturum 1 ay; ayrıntı `docs/cloudflare-kurulum.md`). Telefona ve kasaya PWA olarak yüklendi, çalışıyor.
+- Bağlantı hatası kartı (`#baglanti`): syncLive hatayı sınıflar (ağ, zaman aşımı, 5xx, 503 JSON = SQL, HTML = Access oturumu) ve 20 sn'de bir yeniden dener.
 - Test: Windows/PowerShell burada çalıştırılamaz. Web kısmı Playwright + `python3 -m http.server` + `page.route('**/api/**')` sahteleriyle denenir (serviceWorkers:'block'). Kamera için `--use-file-for-fake-video-capture` ile y4m barkod videosu.
 
 ## Vega (FasterPOS/VegaWin, SQL Server `UNSALDB`, SQL 2008+ sözdizimi çalışıyor)

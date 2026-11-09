@@ -227,3 +227,11 @@ summary { cursor: pointer; color: var(--muted); padding: 6px 0; }
 #stokDialog input { font-size: 22px; text-align: center; margin: 4px 0; }
 #sTeraziBox summary { color: var(--text); font-weight: 650; }
 #sTeraziBox input { margin: 8px 0; }
+.baglanti { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--ink); color: var(--ink-text); border-left: 6px solid var(--label); }
+.baglanti-govde { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.baglanti-govde b { font-size: 16px; }
+.baglanti-govde span { font-size: 14px; opacity: .9; }
+.baglanti-govde small { font-size: 12px; opacity: .65; }
+.baglanti .btn { flex: 0 0 auto; background: var(--label); color: var(--label-ink); border-color: var(--label); }
+.top .muted.kopuk { color: #ffb4a8; opacity: 1; }
+@media (min-width: 900px) { .baglanti { padding-left: 24px; } }
