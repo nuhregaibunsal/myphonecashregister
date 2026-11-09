@@ -5,7 +5,6 @@
 - [ ] Etiket yeni hali (kalın/büyük yazılar, Türkiye yazımında Yerli Üretim logosu) tekrar basılıp bakılacak.
 - [ ] Fiyat sorguda bulunamayan ürün için ＋ Ekle düğmesi.
 
-- [ ] Stok girişi (📦 Stok sekmesi): okut / ara / terazi listesinden seç → adet × çarpan (varsayılan 1) → Vega'nın Hızlı Stok Tanımlama Ctrl+N'si gibi devir giriş fişi (DEVGIRBASLIK + DEVGIRHAREKET + STOKHAREKETLERI + DEPOENVANTER, belge tipi 90, fiş no A + 7 hane). izin.sql tekrar çalıştırılmalı. İlk deneme Çörek Otu Yağı'na 1 adet, Vega'nın kendi kayıtlarıyla yan yana karşılaştırılacak.
 
 ### Yapılacak
 - [ ] Yemeksepeti ve Trendyol entegrasyonu: siparişleri/ürün-fiyat-stok eşitlemesini kasa sunucusu üzerinden yapmak (Trendyol'un açık satıcı API'si var; Yemeksepeti iş ortağı onayı gerektirir). Ekranlar aynı uygulamaya eklenecek, ayrı masaüstü programı gerekmez.
@@ -15,6 +14,7 @@
 - [ ] CL'de aynı ürün kodlu ve fiyatı farklı ürünlerin temizliği (126 kod, 108'inde fiyat farklı; PLU 1000 ve 9994-9999 gibi kopyalar).
 
 ## Tamamlandı
+- [x] Stok girişi (📦 Stok sekmesi): adet × çarpan, devir giriş fişi; dükkanda denendi, Vega'da miktar doğru (30 + 24 = 54)
 - [x] Mobil uygulama: Cloudflare Tunnel + Access ile https://app.tezgahpanel.com, telefona uygulama olarak yüklendi (docs/cloudflare-kurulum.md). Kalan: C:\FiyatGor\alanadi.txt (bitiş uyarısı), diğer kullanıcıların e-postaları, kasa bilgisayarında da uygulama olarak yükleme.
 - [x] İçerik gönderimi telefondan paket terazilerine (W30), içerik 1, 3 ve 282 ile birebir doğrulandı
 - [x] Okutulan barkod stok kodunda da aranır (Vega gibi)

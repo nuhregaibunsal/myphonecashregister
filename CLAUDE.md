@@ -50,6 +50,6 @@ Bu dosya her oturumun başında okunur. Bu projede neyin neden böyle olduğunu 
 
 ## Durum
 - Bitenler ve bekleyenler: `docs/yapilacaklar.md` (her işten sonra güncelle).
-- Stok sekmesi (devir giriş fişi) dükkanda denendi: Çörek Otu Yağı'na 2 × 12 = 24 adet girildi (fiş A0000006), 4 tablo Vega'nın kayıtlarıyla birebir; sadece FIYATI 7-8. ondalık yuvarlaması düzeltildi (Vega keser).
-- Sıradaki: devir düğmesi (yılbaşı), Yemeksepeti/Trendyol entegrasyonu.
+- Stok sekmesi (devir giriş fişi) dükkanda denendi: Çörek Otu Yağı'na 2 × 12 = 24 adet girildi (fiş A0000006), 4 tablo Vega'nın kayıtlarıyla birebir; sadece FIYATI 7-8. ondalık yuvarlaması düzeltildi (Vega keser). Vega'da kalan 54 olarak doğrulandı, iş bitti.
+- Sıradaki (kullanıcı 'yarın' dedi): devir düğmesi, sonra Yemeksepeti/Trendyol entegrasyonu.
 - Commit geçmişindeki eski Claude satırları temizlendi ve kullanıcı onayıyla force push edildi.
