@@ -6,7 +6,7 @@
 - [ ] Fiyat sorguda bulunamayan ürün için ＋ Ekle düğmesi.
 
 ### Yapılacak
-- [ ] Mobil uygulama: Cloudflare Tunnel + Access ile https://fiyat.<alan adı> (docs/cloudflare-kurulum.md). Alan adı .com, otomatik yenileme kapalı; bitişe 30 gün kala uygulamada uyarı (C:\FiyatGor\alanadi.txt). Telefonlarda "Ana ekrana ekle". Kasa için de aynı uygulama (masaüstü ayrı program gerekmez); ileride Trendyol/Yemeksepeti ekranları buna eklenecek.
+- [ ] Mobil uygulama: Cloudflare Tunnel + Access ile https://app.tezgahpanel.com (alan adı alındı) (docs/cloudflare-kurulum.md). Alan adı .com, otomatik yenileme kapalı; bitişe 30 gün kala uygulamada uyarı (C:\FiyatGor\alanadi.txt). Telefonlarda "Ana ekrana ekle". Kasa için de aynı uygulama (masaüstü ayrı program gerekmez); ileride Trendyol/Yemeksepeti ekranları buna eklenecek.
 - [ ] Telefondan stok girişi (mal kabul): ürünü okutup gelen miktarı Vega'ya işleme. Vega'nın stok girişini nasıl kaydettiği incelenecek.
 
 ### Dükkan sahibi elle yapacak
