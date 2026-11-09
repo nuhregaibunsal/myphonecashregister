@@ -69,3 +69,4 @@ W30F01,<kod 4 hex>L<gövde uzunluğu 3 hex>:X=00.D=<metin uzunluğu 3 hex>.<meti
 - Kod onaltılık kabul edildi (W02'deki PLU gibi); 10 ve üstü kodla henüz doğrulanmadı.
 - Terazi cevabı: `W30:O0001` (içerik 1 ve 3 için aynı, yani kod değil "tamam" anlamında).
 - Paket terazileri: 192.168.1.153 (Paket Yeni), 192.168.1.204 (Terazi Paket İçin). Değiştirmek için C:\FiyatGor\paket-terazi.txt.
+- Doğrulama: içerik 282 (kısa metin) de birebir tuttu: `W30F01,011AL02D:X=00.D=022.`, XOR 0xD0, 62 bayt. Kod onaltılık, uzunluklar 3 haneye sıfırla tamamlanıyor.

@@ -42,6 +42,7 @@
 
   let products = [];
   let byBarcode = new Map();
+  let byStokKodu = new Map();
   let meta = { updated: null, source: "" };
   let settings = Object.assign({}, Scale.DEFAULTS, store.get("scaleSettings", {}));
   if (settings.unknownScale === "price") settings.unknownScale = "ocr";
@@ -51,8 +52,11 @@
 
   function index() {
     byBarcode = new Map();
+    byStokKodu = new Map();
     products.forEach(p => {
       String(p.barkod || "").split(/[;,|\s]+/).map(Scale.normCode).filter(Boolean).forEach(b => byBarcode.set(b, p));
+      const k = String(p.kod || "").trim();
+      if (/^\d{6,14}$/.test(k) && !byStokKodu.has(k)) byStokKodu.set(k, p);
     });
   }
 
@@ -1215,7 +1219,8 @@
   function lookup(code) {
     code = Scale.normCode(code);
     if (!code) return null;
-    const direct = byBarcode.get(code) || (code.length === 12 ? byBarcode.get("0" + code) : null) || (code.length === 13 && code[0] === "0" ? byBarcode.get(code.slice(1)) : null);
+    const direct = byBarcode.get(code) || (code.length === 12 ? byBarcode.get("0" + code) : null) || (code.length === 13 && code[0] === "0" ? byBarcode.get(code.slice(1)) : null)
+      || byStokKodu.get(code) || (code.length === 12 ? byStokKodu.get("0" + code) : null) || (code.length === 13 && code[0] === "0" ? byStokKodu.get(code.slice(1)) : null);
     if (direct) return { product: direct };
     const parsed = Scale.parseScale(code, settings);
     if (parsed) {

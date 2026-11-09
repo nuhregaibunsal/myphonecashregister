@@ -2,7 +2,6 @@
 
 ## Bekleyen
 ### Dükkanda denenecek (yazıldı)
-- [ ] İçerik gönderimi: İçerik sekmesinde 282 yaz → "282 koduyla yeni içerik oluştur" → içindekiler "abcç" → Kaydet (gönder işaretli). Wireshark'la 192.168.1.204 yakala (tahmin: W30F01,011AL02D:X=00.D=022. ... XOR 0xD0, 62 bayt). CL'de TEST (PLU 386) içerik no 282 yapıp teraziye gönder, paket terazisinden TEST etiketi bas; abcç çıkarsa kod ve kısa metin doğrulanır.
 - [ ] Etiket yeni hali (kalın/büyük yazılar, Türkiye yazımında Yerli Üretim logosu) tekrar basılıp bakılacak.
 - [ ] Fiyat sorguda bulunamayan ürün için ＋ Ekle düğmesi.
 
@@ -14,6 +13,8 @@
 - [ ] CL'de aynı ürün kodlu ve fiyatı farklı ürünlerin temizliği (126 kod, 108'inde fiyat farklı; PLU 1000 ve 9994-9999 gibi kopyalar).
 
 ## Tamamlandı
+- [x] İçerik gönderimi telefondan paket terazilerine (W30), içerik 1, 3 ve 282 ile birebir doğrulandı
+- [x] Okutulan barkod stok kodunda da aranır (Vega gibi)
 - [x] Alt menü sekmeleri Ayarlar'dan açılıp kapatılabilir (telefon başına)
 - [x] İçerik sekmesinde olmayan kodu yazınca o kodla yeni içerik oluşturma
 - [x] Fiyat sorgu ayrı sekme (🔎 Sorgu), sekmeye girince kamera kendiliğinden açılır
