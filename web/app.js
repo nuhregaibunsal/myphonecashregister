@@ -117,10 +117,43 @@
   let priceSel = null;
   const priceLog = [];
 
+  const MENU = [["hesap", "🧮 Hesap", false], ["urunler", "📋 Ürünler", false], ["fiyat", "₺ Fiyat", true], ["ekle", "＋ Ekle", true], ["icerik", "🥜 İçerik", true]];
+
+  function menuUygula() {
+    const gizli = store.get("gizliSekmeler", []);
+    MENU.forEach(([k, , yetki]) => {
+      const b = document.querySelector('.tabs button[data-tab="' + k + '"]');
+      if (b) b.hidden = (yetki && !canEditPrice) || gizli.includes(k);
+    });
+    const aktif = document.querySelector(".tabs button.active");
+    if (aktif && aktif.hidden) switchTab("ayarlar");
+  }
+
+  function menuAyarKur() {
+    const box = $("menuAyar");
+    box.innerHTML = "";
+    const gizli = store.get("gizliSekmeler", []);
+    MENU.forEach(([k, ad, yetki]) => {
+      if (yetki && !canEditPrice) return;
+      const l = document.createElement("label");
+      l.className = "check";
+      l.innerHTML = '<input type="checkbox"> <span></span>';
+      l.querySelector("span").textContent = ad;
+      const c = l.querySelector("input");
+      c.checked = !gizli.includes(k);
+      c.onchange = () => {
+        const g = store.get("gizliSekmeler", []).filter(x => x !== k);
+        if (!c.checked) g.push(k);
+        store.set("gizliSekmeler", g);
+        menuUygula();
+      };
+      box.appendChild(l);
+    });
+  }
+
   function updatePriceTab() {
-    $("tabFiyatBtn").hidden = !canEditPrice;
-    $("tabEkleBtn").hidden = !canEditPrice;
-    $("tabIcerikBtn").hidden = !canEditPrice;
+    menuUygula();
+    menuAyarKur();
     $("guncelleCard").hidden = !live;
     if (canEditPrice) loadLists();
   }
@@ -1839,6 +1872,8 @@
 
   function bind() {
     document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => switchTab(b.dataset.tab));
+    menuUygula();
+    menuAyarKur();
     $("startScan").onclick = () => { scanMode = "hesap"; startScan(); };
     $("startSorgu").onclick = () => { scanMode = "sorgu"; startScan(); window.scrollTo(0, 0); };
     $("sorguKapat").onclick = sorguKapat;

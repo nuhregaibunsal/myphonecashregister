@@ -8,12 +8,14 @@
 - [ ] Fiyat sorguda bulunamayan ürün için ＋ Ekle düğmesi.
 
 ### Yapılacak
+- [ ] Mobil uygulama: şu an site güvenilmeyen (kendi imzalı) sertifikayla açıldığı için telefon uygulama olarak yüklemiyor, sadece adres kısayolu ekliyor. 1. adım: Tailscale'in ücretsiz geçerli sertifikasıyla (kasa-bilgisayari.xxx.ts.net adresi, tailscale cert) siteyi açmak; böylece "Uygulamayı yükle" çıkar, adres çubuğu olmadan tam ekran çalışır. Yetmezse Android uygulaması (APK) olarak paketlemek.
 - [ ] Telefondan stok girişi (mal kabul): ürünü okutup gelen miktarı Vega'ya işleme. Vega'nın stok girişini nasıl kaydettiği incelenecek.
 
 ### Dükkan sahibi elle yapacak
 - [ ] CL'de aynı ürün kodlu ve fiyatı farklı ürünlerin temizliği (126 kod, 108'inde fiyat farklı; PLU 1000 ve 9994-9999 gibi kopyalar).
 
 ## Tamamlandı
+- [x] Alt menü sekmeleri Ayarlar'dan açılıp kapatılabilir (telefon başına)
 - [x] Etiket yazdırma (Sbarco), dükkanda basıldı
 - [x] Sabit fiyatlı terazi ürünü ekleme, özel kodlar, fiyat sorgu, birim ekleme, eklerken içerik seçimi: denendi
 - [x] İçerik gönderim protokolü (W30) çözüldü
