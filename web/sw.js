@@ -1,4 +1,4 @@
-const CACHE = "fiyatgor-v39";
+const CACHE = "fiyatgor-v40";
 const FILES = [
   "./",
   "index.html",
@@ -10,10 +10,11 @@ const FILES = [
   "etiket.js",
   "ocr.js",
   "vendor/ocr/tesseract.min.js",
-  "manifest.webmanifest",
-  "icon.svg",
-  "icon-192.png",
-  "icon-512.png",
+  "pwa/manifest.webmanifest",
+  "pwa/icon.svg",
+  "pwa/icon-192.png",
+  "pwa/icon-512.png",
+  "pwa/apple-touch-icon.png",
   "vendor/zxing.min.js",
   "vendor/xlsx.full.min.js"
 ];

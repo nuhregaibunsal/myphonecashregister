@@ -36,6 +36,13 @@ Cloudflare'in ekran adları zamanla değişebilir. Bir adım tutmazsa ekran gör
 10. Policy ekleyin: Action **Allow**, Include → **Emails** → kullanacak herkesin e-posta adresi.
 11. Kaydedin. Artık adresi açan herkes e-postasını yazar, gelen 6 haneli kodu girer. Listede olmayan giremez.
 
+## D2. Uygulama yükleme dosyaları için girişsiz izin
+Telefon "Uygulamayı yükle" derken simge ve tanım dosyasını (manifest) çerezsiz ister; Access bunları giriş sayfasına yönlendirirse telefon yüklemeyi reddeder. Bu dosyalar `/pwa/` klasöründe ve içlerinde gizli bilgi yok.
+- Access → Applications → Add → Self-hosted, ad: `Tezgah yukleme`
+- Domain: `app` + `tezgahpanel.com`, **Path:** `pwa`
+- Policy: Action **Bypass**, Include → **Everyone**
+- Kaydedin. Sadece `/pwa/...` girişsiz açılır, uygulamanın geri kalanı yine e-posta koduyla korunur.
+
 ## E. Uygulama tarafı
 12. Kasa bilgisayarında `C:\FiyatGor\alanadi.txt` dosyası oluşturup içine sadece alan adını yazın (ör. `tezgahpanel.com`). Sunucu bitiş tarihini buradan takip eder.
 13. Telefonda `https://app.tezgahpanel.com` adresini açın, e-posta kodu ile girin.
