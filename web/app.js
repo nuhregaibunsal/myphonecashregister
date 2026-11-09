@@ -368,18 +368,26 @@
     if (!priceSel || !unitData) return;
     const num = v => parseFloat(String(v).replace(/\./g, "").replace(",", "."));
     const main = unitData.birimler[0];
-    const yeni = num($("fNew").value);
+    const bos = v => !String(v || "").trim();
+    const yeni = bos($("fNew").value) ? main.fiyat : num($("fNew").value);
     const pin = String($("fPin").value).trim();
-    if (!(yeni > 0)) { fMsg("Yeni fiyatı yaz.", "err"); return; }
+    if (!(yeni > 0)) { fMsg("Yeni fiyatı doğru yaz.", "err"); return; }
     if (!/^\d{4,8}$/.test(pin)) { fMsg("PIN 4-8 rakam olmalı.", "err"); return; }
     const changes = [{ ind: main.ind, eski: main.fiyat, yeni: round2(yeni) }];
     for (const u of unitData.birimler.slice(1)) {
-      const v = num($("fu-" + u.ind).value);
-      if (!(v > 0)) { fMsg(unitLabel(u) + " için fiyat yaz.", "err"); return; }
+      const inp = $("fu-" + u.ind);
+      const v = !inp || bos(inp.value) ? u.fiyat : num(inp.value);
+      if (!(v > 0)) { fMsg(unitLabel(u) + " için fiyatı doğru yaz.", "err"); return; }
       changes.push({ ind: u.ind, eski: u.fiyat, yeni: round2(v) });
     }
     const real = changes.filter(c => Math.abs(c.yeni - c.eski) >= 0.005);
-    if (!real.length) { fMsg("Fiyatlar zaten aynı.", "err"); return; }
+    const birimVar = !$("fBirimBox").hidden && !bos($("bBarkod").value);
+    if (!real.length) {
+      if (birimVar) { await birimEkle(); return; }
+      fMsg("Fiyat değişmedi, kaydedilecek bir şey yok.", "err");
+      return;
+    }
+    if (birimVar) { fMsg("Önce fiyatı kaydet, sonra birimi ekle (ya da fiyat kutusunu boş bırak).", "err"); return; }
     $("fSave").disabled = true;
     fMsg("Kaydediliyor…");
     try {
