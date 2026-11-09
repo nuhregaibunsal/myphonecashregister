@@ -221,3 +221,9 @@ summary { cursor: pointer; color: var(--muted); padding: 6px 0; }
 @media (prefers-reduced-motion: reduce) {
   .btn:active { transform: none; }
 }
+.sd-toplam { margin: 4px 0 10px; padding: 10px 12px; border-radius: var(--radius); background: var(--warn-bg); font-weight: 650; }
+.sd-toplam b { font: 22px/1.1 "Tezgah Display", system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+.sd-pin { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+#stokDialog input { font-size: 22px; text-align: center; margin: 4px 0; }
+#sTeraziBox summary { color: var(--text); font-weight: 650; }
+#sTeraziBox input { margin: 8px 0; }

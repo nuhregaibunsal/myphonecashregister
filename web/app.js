@@ -121,7 +121,7 @@
   let priceSel = null;
   const priceLog = [];
 
-  const MENU = [["hesap", "🧮 Hesap", false], ["sorgu", "🔎 Sorgu", false], ["urunler", "📋 Ürünler", false], ["fiyat", "₺ Fiyat", true], ["ekle", "＋ Ekle", true], ["icerik", "🥜 İçerik", true]];
+  const MENU = [["hesap", "🧮 Hesap", false], ["sorgu", "🔎 Sorgu", false], ["urunler", "📋 Ürünler", false], ["fiyat", "₺ Fiyat", true], ["ekle", "＋ Ekle", true], ["stok", "📦 Stok", true], ["icerik", "🥜 İçerik", true]];
 
   function menuUygula() {
     const gizli = store.get("gizliSekmeler", []);
@@ -723,6 +723,139 @@
     const v = $("aClIcerik").value.trim();
     const x = icerikler && /^\d+$/.test(v) && Number(v) > 0 ? icerikler.find(i => String(i.kod) === v) : null;
     $("aClIcerikInfo").textContent = Number(v) > 0 ? (x ? "İçerik " + v + ": " + icerikOzet(x.metin) : (icerikler ? "Bu kodda içerik yok." : "")) : "";
+  }
+
+  let stokSecili = null;
+  const stokLog = [];
+  const sayiOku = v => { const t = String(v || "").trim().replace(/\s/g, ""); if (!t) return NaN; return parseFloat(/,/.test(t) ? t.replace(/\./g, "").replace(",", ".") : t); };
+  const miktarYaz = n => (Math.round(n * 1000) / 1000).toLocaleString("tr-TR", { maximumFractionDigits: 3 });
+
+  function sMsg(text, kind) { $("sMsg").textContent = text || ""; $("sMsg").className = "msg " + (kind || ""); }
+  function sdMsg(text, kind) { $("sdMsg").textContent = text || ""; $("sdMsg").className = "msg " + (kind || ""); }
+
+  function stokHesap() {
+    const a = sayiOku($("sdAdet").value), c = sayiOku($("sdCarpan").value) || 1;
+    const el = $("sdToplam");
+    if (!(a > 0) || !(c > 0) || !stokSecili) { el.textContent = "Adet yaz; çarpan kutudaki adet içindir (24'lü koli için 24)."; return 0; }
+    const t = Math.round(a * c * 1000) / 1000;
+    el.innerHTML = "";
+    el.append(miktarYaz(a) + " × " + miktarYaz(c) + " = ");
+    const b = document.createElement("b"); b.textContent = miktarYaz(t) + " " + (stokSecili.birim || "");
+    el.append(b, " eklenecek · yeni kalan " + miktarYaz((Number(stokSecili.kalan) || 0) + t));
+    return t;
+  }
+
+  async function stokAc(p) {
+    if (!p || !p.birimind) { sMsg("Bu ürün kasada kayıtlı değil.", "err"); return; }
+    sMsg("Ürün bilgisi alınıyor…");
+    try {
+      const res = await fetch("api/stok?birim=" + encodeURIComponent(p.birimind), { cache: "no-store" });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.ok) throw new Error(j.error || ("HTTP " + res.status));
+      stokSecili = j;
+      sMsg("");
+      $("sdAd").textContent = j.ad;
+      $("sdBilgi").textContent = [j.kod, "Şu an: " + miktarYaz(Number(j.kalan) || 0) + " " + (j.birim || "")].filter(Boolean).join(" · ");
+      $("sdAdet").value = "";
+      $("sdCarpan").value = "1";
+      $("sdPin").value = pinCache && Date.now() - pinAt < 10 * 60000 ? pinCache : "";
+      sdMsg("");
+      $("sdEkle").disabled = false;
+      stokHesap();
+      $("stokDialog").showModal();
+      setTimeout(() => $("sdAdet").focus(), 50);
+    } catch (e) {
+      sMsg("Ürün bilgisi alınamadı: " + e.message, "err");
+    }
+  }
+
+  async function stokEkle() {
+    if (!stokSecili) return;
+    const t = stokHesap();
+    const pin = String($("sdPin").value).trim();
+    if (!(t > 0)) { sdMsg("Adet ve çarpanı yaz.", "err"); return; }
+    if (t > 100000) { sdMsg("Miktar çok büyük, adet ve çarpanı kontrol et.", "err"); return; }
+    if (!/^\d{4,8}$/.test(pin)) { sdMsg("PIN 4-8 rakam olmalı.", "err"); return; }
+    $("sdEkle").disabled = true;
+    sdMsg("Ekleniyor…");
+    try {
+      const res = await fetch("api/stok", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ stok: stokSecili.stok, miktar: t, pin }) });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok && j.ok) {
+        pinCache = pin; pinAt = Date.now();
+        $("stokDialog").close();
+        stokLog.unshift({ ad: stokSecili.ad, miktar: t, birim: stokSecili.birim, kalan: j.kalan, belge: j.belge, at: new Date() });
+        stokLogCiz();
+        sMsg(stokSecili.ad + ": +" + miktarYaz(t) + " " + (stokSecili.birim || "") + " eklendi (fiş " + j.belge + "). Kalan " + miktarYaz(j.kalan) + ".", "ok");
+        beep(true);
+        return;
+      }
+      if (res.status === 401) { pinCache = ""; $("sdPin").value = ""; }
+      sdMsg(j.error || ("Eklenemedi (" + res.status + ")"), "err");
+    } catch (e) {
+      sdMsg("Kasa bilgisayarına ulaşılamadı.", "err");
+    }
+    $("sdEkle").disabled = false;
+  }
+
+  function stokLogCiz() {
+    $("sLogCard").hidden = !stokLog.length;
+    const ul = $("sLog");
+    ul.innerHTML = "";
+    stokLog.forEach(x => {
+      const li = document.createElement("li");
+      li.innerHTML = '<div class="info"><b></b><span class="muted small"></span></div><strong></strong>';
+      li.querySelector("b").textContent = x.ad;
+      li.querySelector("span").textContent = x.at.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }) + " · fiş " + x.belge + " · kalan " + miktarYaz(x.kalan);
+      li.querySelector("strong").textContent = "+" + miktarYaz(x.miktar);
+      ul.appendChild(li);
+    });
+  }
+
+  function stokScan(code) {
+    const r = lookup(code);
+    if (r && r.product && !r.scale) { beep(true); stokAc(r.product); return; }
+    if (r && r.product && r.scale) { beep(true); stokAc(r.product); return; }
+    beep(false);
+    sMsg("Bulunamadı: " + code + ". Terazi ürünüyse aşağıdaki listeden seç.", "err");
+  }
+
+  function stokAra(q) {
+    const ul = $("sSuggest");
+    ul.innerHTML = "";
+    q = String(q || "").trim();
+    if (!q) return;
+    const r = /^\d{6,14}$/.test(q) ? lookup(q) : null;
+    if (r && r.product) { stokAc(r.product); return; }
+    const k = findByKod(q);
+    if (k) { stokAc(k); return; }
+    const hits = search(q, 8).filter(p => p.birimind);
+    if (!hits.length) { sMsg("Bulunamadı.", "err"); return; }
+    sMsg("");
+    hits.forEach(p => {
+      const li = document.createElement("li");
+      li.textContent = p.ad + (p.kod ? " · " + p.kod : "");
+      li.onclick = () => { ul.innerHTML = ""; $("sAra").value = ""; stokAc(p); };
+      ul.appendChild(li);
+    });
+  }
+
+  function stokTeraziListe() {
+    const q = lower($("sTrzAra").value).trim();
+    const seen = new Set();
+    const list = products.filter(p => /^TRZ-/i.test(p.kod || "") && p.birimind && !seen.has(p.kod) && seen.add(p.kod))
+      .filter(p => !q || lower(p.ad + " " + p.kod).includes(q))
+      .sort((a, b) => (trzKod(a.kod) - trzKod(b.kod)));
+    const ul = $("sTrzList");
+    ul.innerHTML = "";
+    list.slice(0, 300).forEach(p => {
+      const li = document.createElement("li");
+      li.innerHTML = '<div class="info"><b></b><span class="muted small"></span></div>';
+      li.querySelector("b").textContent = p.ad;
+      li.querySelector("span").textContent = p.kod;
+      li.onclick = () => stokAc(p);
+      ul.appendChild(li);
+    });
   }
 
   const kodNorm = v => String(v || "").toLocaleUpperCase("tr-TR").replace(/[^0-9A-ZÇĞİÖŞÜ]/g, "").replace(/^([A-ZÇĞİÖŞÜ]*)0+(?=\d)/, "$1");
@@ -1472,10 +1605,11 @@
   function onDetected(code, corners) {
     const now = Date.now();
     if (code === lastCode && now - lastSeen < 1500) { lastSeen = now; return; }
-    if (busy || $("priceDialog").open || $("qtyDialog").open) { if (code === lastCode) lastSeen = now; return; }
+    if (busy || $("priceDialog").open || $("qtyDialog").open || $("stokDialog").open) { if (code === lastCode) lastSeen = now; return; }
     if (now - lastTime < 600) return;
     lastCode = code; lastTime = now; lastSeen = now;
     if (scanMode === "sorgu") { sorguGoster(code); return; }
+    if (scanMode === "stok") { stokScan(code); return; }
     if (scanMode === "fiyat") { handlePriceScan(code); return; }
     if (scanMode === "ekle") { handleAddScan(code); return; }
     const snap = Scale.parseScale(code, settings) ? snapshot(corners) : null;
@@ -1713,6 +1847,7 @@
     document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
     stopScan();
     if (name === "urunler") renderList();
+    if (name === "stok") stokTeraziListe();
     if (name === "sorgu") { scanMode = "sorgu"; startScan(); window.scrollTo(0, 0); }
     if (name === "icerik" && canEditPrice && !icerikler) loadIcerikler();
     if (name === "ekle" && canEditPrice && (!$("aBirim").options.length || !$("aKdv").options.length)) loadLists();
@@ -1915,6 +2050,14 @@
     $("fSearch").oninput = renderPriceSuggest;
     $("fSave").onclick = savePrice;
     $("tKodBtn").onclick = toggleSameCodes;
+    $("sScan").onclick = () => { scanMode = "stok"; sMsg(""); startScan(); window.scrollTo(0, 0); };
+    $("sForm").onsubmit = e => { e.preventDefault(); stokAra($("sAra").value); };
+    $("sTrzAra").oninput = stokTeraziListe;
+    $("sdAdet").oninput = stokHesap;
+    $("sdCarpan").oninput = stokHesap;
+    $("sdEkle").onclick = stokEkle;
+    $("sdVazgec").onclick = () => $("stokDialog").close();
+    $("sdPin").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); stokEkle(); } });
     $("iForm").onsubmit = e => { e.preventDefault(); icerikAra($("iAra").value); };
     $("iAra").oninput = () => { if (!/^\d+$/.test($("iAra").value.trim())) icerikAra($("iAra").value); };
     $("iYeni").onclick = icerikYeniAc;

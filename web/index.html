@@ -251,6 +251,27 @@
     </div>
   </section>
 
+  <section id="tab-stok" class="tab">
+    <div class="row">
+      <button class="btn primary big" id="sScan" type="button">📷 Gelen ürünü okut</button>
+    </div>
+    <form class="row" id="sForm" autocomplete="off">
+      <input id="sAra" placeholder="Barkod, stok kodu ya da ürün adı" enterkeyhint="search">
+      <button class="btn" type="submit">Bul</button>
+    </form>
+    <ul class="suggest" id="sSuggest"></ul>
+    <p class="msg" id="sMsg"></p>
+    <div class="card" id="sLogCard" hidden>
+      <h2>Bu oturumda girilenler</h2>
+      <ul class="list" id="sLog"></ul>
+    </div>
+    <details class="card" id="sTeraziBox">
+      <summary>Terazi ürünleri (barkodsuz kutular)</summary>
+      <input id="sTrzAra" placeholder="Terazi ürünlerinde ara" autocomplete="off">
+      <ul class="list" id="sTrzList"></ul>
+    </details>
+  </section>
+
   <section id="tab-icerik" class="tab">
     <div class="card">
       <h2>İçerik (CL Works)</h2>
@@ -367,10 +388,26 @@
   <button data-tab="urunler" type="button">📋<span>Ürünler</span></button>
   <button data-tab="fiyat" id="tabFiyatBtn" type="button" hidden>₺<span>Fiyat</span></button>
   <button data-tab="ekle" id="tabEkleBtn" type="button" hidden>＋<span>Ekle</span></button>
+  <button data-tab="stok" id="tabStokBtn" type="button" hidden>📦<span>Stok</span></button>
   <button data-tab="icerik" id="tabIcerikBtn" type="button" hidden>🥜<span>İçerik</span></button>
   <button data-tab="ayarlar" type="button">⚙️<span>Ayarlar</span></button>
 </nav>
 
+<dialog id="stokDialog">
+  <h3 id="sdAd"></h3>
+  <p class="muted small" id="sdBilgi"></p>
+  <div class="grid">
+    <label>Adet<input id="sdAdet" inputmode="decimal" autocomplete="off"></label>
+    <label>Çarpan<input id="sdCarpan" inputmode="decimal" value="1" autocomplete="off"></label>
+  </div>
+  <p class="sd-toplam" id="sdToplam"></p>
+  <label class="sd-pin">PIN<input id="sdPin" type="password" inputmode="numeric" autocomplete="off"></label>
+  <p class="msg" id="sdMsg"></p>
+  <div class="row">
+    <button class="btn" id="sdVazgec" type="button">Vazgeç</button>
+    <button class="btn primary" id="sdEkle" type="button">Stoğa ekle</button>
+  </div>
+</dialog>
 <dialog id="priceDialog">
   <form method="dialog">
     <h3 id="pTitle"></h3>

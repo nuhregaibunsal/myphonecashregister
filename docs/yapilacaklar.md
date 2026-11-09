@@ -5,8 +5,10 @@
 - [ ] Etiket yeni hali (kalın/büyük yazılar, Türkiye yazımında Yerli Üretim logosu) tekrar basılıp bakılacak.
 - [ ] Fiyat sorguda bulunamayan ürün için ＋ Ekle düğmesi.
 
+- [ ] Stok girişi (📦 Stok sekmesi): okut / ara / terazi listesinden seç → adet × çarpan (varsayılan 1) → Vega'nın Hızlı Stok Tanımlama Ctrl+N'si gibi devir giriş fişi (DEVGIRBASLIK + DEVGIRHAREKET + STOKHAREKETLERI + DEPOENVANTER, belge tipi 90, fiş no A + 7 hane). izin.sql tekrar çalıştırılmalı. İlk deneme Çörek Otu Yağı'na 1 adet, Vega'nın kendi kayıtlarıyla yan yana karşılaştırılacak.
+
 ### Yapılacak
-- [ ] Telefondan stok girişi (mal kabul): ürünü okutup gelen miktarı Vega'ya işleme. Vega'nın stok girişini nasıl kaydettiği incelenecek.
+- [ ] Devir: yeni dönem açılınca (yılbaşı) önceki dönemde kalan miktarları tek tuşla yeni döneme devir giriş fişi olarak aktarma.
 
 ### Dükkan sahibi elle yapacak
 - [ ] CL'de aynı ürün kodlu ve fiyatı farklı ürünlerin temizliği (126 kod, 108'inde fiyat farklı; PLU 1000 ve 9994-9999 gibi kopyalar).
