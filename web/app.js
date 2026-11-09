@@ -632,7 +632,7 @@
     $("iKaydet").disabled = true;
     iKayitMsg("Kaydediliyor…");
     try {
-      const res = await fetch("api/icerik", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kod: icerikKod, metin, pin }) });
+      const res = await fetch("api/icerik", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kod: icerikKod, metin, pin, gonder: $("iGonder").checked }) });
       const j = await res.json().catch(() => ({}));
       if (res.ok && j.ok) {
         pinCache = pin; pinAt = Date.now();
@@ -641,7 +641,8 @@
         icerikYeni = false;
         $("iBaslik").textContent = "İçerik kodu " + icerikKod;
         $("iUyari").hidden = true;
-        iKayitMsg("CL'ye kaydedildi (kod " + icerikKod + "). Terazilere göndermek için şimdilik CL Works'te bu içeriği işaretleyip paket terazilerine Gönder'e bas.", "ok");
+        const tm = j.teraziMesaj || "";
+        iKayitMsg("CL'ye kaydedildi (kod " + icerikKod + "). " + (tm || "Terazilere gönderilmedi; göndermek için CL Works'te Gönder'e bas."), /ulasilamadi|Ulasilamadi/.test(tm) ? "err" : "ok");
       } else {
         if (res.status === 401) { pinCache = ""; $("iPin").value = ""; }
         iKayitMsg(j.error || ("Kaydedilemedi (" + res.status + ")"), "err");

@@ -2,23 +2,20 @@
 
 ## Bekleyen
 ### Dükkanda denenecek (yazıldı)
-- [ ] Etiket yazdırma (Sbarco, Fiyat sekmesi → Etiket): telefondan 1 kopya bas, Vega'nınkiyle karşılaştır. Yerleşim web/etiket-duzen.js (Vega tasarım birimleri). T.E.T.T = yazdırma günü + 366 gün, kayıt no KOD6, Yerli Üretim logosu KOD10 = TURKIYE.
-- [ ] Sabit fiyatlı terazi ürünü ekleme (Ekle → Terazi ürünü → Sabit fiyatlı): kasada birim ADET, barkod 28 + ürün kodu (5 hane) + 00001 + kontrol hanesi (örnek TRZ-430 → 2800430000018), CL'de tip 2. Adet. Teraziden çıkan etiket kasada okutulacak.
-- [ ] Ürün eklerken özel kodlar (Tür, üretim yeri, kayıt no; gelişmiş: Sınıf, Grup, 4-ÖK, 5-ÖK, Marka, Renk). Eklenen ürün StokEx'te kontrol edilecek.
-- [ ] Wireshark: CL'den 24 numaralı içeriği yalnız 192.168.1.153'e gönderirken yakala (filtre host 192.168.1.153). İçeriklerin paket terazilerine otomatik gönderimi için.
-
-- [ ] Fiyat sorgu (Hesap → 🔎 Fiyat Sorgu): kamera açık kalır, okutulan ürünün adı ve fiyatı büyük çıkar, kart 5 sn sonra ya da Kapat ile kapanır, açıkken yeni barkod okunursa yeni ürün gelir. Düzenle → Fiyat sekmesinde o ürün açılır.
-- [ ] Birim ekleme (Fiyat → ürün → ＋ Birim ekle): birim adı, ağırlık, barkod, fiyat (ağırlığa göre hesaplanır). Ürünün var olan ek biriminden (yoksa ana biriminden) kopyalanır. TEST ürününde dene, Vega'da yeni birimin barkod standardı ve diğer alanları kontrol edilecek.
-- [ ] Ürün eklerken içerik no seçimi (Ekle → Terazi → İçerik no kutusuna dokununca içerik listesi, altında seçilen içeriğin özeti).
+- [ ] İçerik gönderimi (İçerik → Kaydet, "paket terazilerine gönder" işaretli): önce 10'un üstünde bir kodla (ör. 24) dene, terazide içeriği kontrol et. Protokol W30, içerik 1 ve 3 ile birebir doğrulandı.
+- [ ] Etiket yeni hali (kalın/büyük yazılar, Türkiye yazımında Yerli Üretim logosu) tekrar basılıp bakılacak.
+- [ ] Fiyat sorguda bulunamayan ürün için ＋ Ekle düğmesi.
 
 ### Yapılacak
-- [ ] İçeriklerin paket terazilerine (192.168.1.153, 192.168.1.204) otomatik gönderimi (Wireshark yakalamasından sonra, tahmin et → doğrula).
 - [ ] Telefondan stok girişi (mal kabul): ürünü okutup gelen miktarı Vega'ya işleme. Vega'nın stok girişini nasıl kaydettiği incelenecek.
 
 ### Dükkan sahibi elle yapacak
 - [ ] CL'de aynı ürün kodlu ve fiyatı farklı ürünlerin temizliği (126 kod, 108'inde fiyat farklı; PLU 1000 ve 9994-9999 gibi kopyalar).
 
 ## Tamamlandı
+- [x] Etiket yazdırma (Sbarco), dükkanda basıldı
+- [x] Sabit fiyatlı terazi ürünü ekleme, özel kodlar, fiyat sorgu, birim ekleme, eklerken içerik seçimi: denendi
+- [x] İçerik gönderim protokolü (W30) çözüldü
 - [x] Telefondan fiyat sorgulama, barkod/terazi etiketi okuma, sepet
 - [x] Kasa veritabanından (Vega/UNSALDB) canlı bağlantı
 - [x] Telefondan fiyat değiştirme (PIN korumalı, çok birimli ürünlerde tüm birimler)

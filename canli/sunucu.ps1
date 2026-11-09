@@ -393,6 +393,66 @@ function Get-Icerikler {
     return $script:icerikCache
 }
 
+$paketFile = Join-Path $root "paket-terazi.txt"
+function Get-PaketTerazileri {
+    $txt = "192.168.1.153,192.168.1.204"
+    try { if (Test-Path $paketFile) { $t = ([System.IO.File]::ReadAllText($paketFile)).Trim(); if ($t) { $txt = $t } } } catch { }
+    return @($txt -split '[,;\s]+' | Where-Object { $_ -match '^\d{1,3}(\.\d{1,3}){3}$' })
+}
+
+function Build-IcerikPaket([int]$kod, [string]$metin) {
+    $enc = [System.Text.Encoding]::GetEncoding(1254)
+    $t = $enc.GetBytes(($metin -replace "`r`n", "`n"))
+    $bas = [System.Text.Encoding]::ASCII.GetBytes(("X=00.D={0:X3}." -f $t.Length))
+    $body = New-Object byte[] ($bas.Length + $t.Length)
+    [Array]::Copy($bas, 0, $body, 0, $bas.Length)
+    [Array]::Copy($t, 0, $body, $bas.Length, $t.Length)
+    $cs = 0
+    foreach ($b in $body) { $cs = $cs -bxor $b }
+    $hdr = [System.Text.Encoding]::ASCII.GetBytes(("W30F01,{0:X4}L{1:X3}:" -f $kod, $body.Length))
+    $pk = New-Object byte[] ($hdr.Length + $body.Length + 1)
+    [Array]::Copy($hdr, 0, $pk, 0, $hdr.Length)
+    [Array]::Copy($body, 0, $pk, $hdr.Length, $body.Length)
+    $pk[$pk.Length - 1] = [byte]$cs
+    return , $pk
+}
+
+function Send-Paket([string]$ip, [byte[]]$pk, [string]$beklenen) {
+    $cl = New-Object System.Net.Sockets.TcpClient
+    try {
+        $iar = $cl.BeginConnect($ip, 20304, $null, $null)
+        if (-not $iar.AsyncWaitHandle.WaitOne(3000)) { return "baglanti zaman asimi" }
+        $cl.EndConnect($iar)
+        $cl.ReceiveTimeout = 4000; $cl.SendTimeout = 4000
+        $ns = $cl.GetStream()
+        $ns.Write($pk, 0, $pk.Length); $ns.Flush()
+        $buf = New-Object byte[] 256
+        $txt = ""
+        $t0 = Get-Date
+        while (((Get-Date) - $t0).TotalMilliseconds -lt 4000) {
+            if ($ns.DataAvailable) {
+                $n = $ns.Read($buf, 0, 256)
+                for ($i = 0; $i -lt $n; $i++) { if ($buf[$i] -ge 32 -and $buf[$i] -lt 127) { $txt += [char]$buf[$i] } }
+                if ($txt -match 'W\d\d:O\d+') { break }
+            } else { Start-Sleep -Milliseconds 80 }
+        }
+        if ($txt -match [regex]::Escape($beklenen)) { return "OK" }
+        if ($txt) { return "cevap=$txt" }
+        return "cevap yok"
+    } catch { return $_.Exception.Message } finally { $cl.Close() }
+}
+
+function Send-Icerik([int]$kod, [string]$metin) {
+    $pk = Build-IcerikPaket $kod $metin
+    $sonuc = New-Object System.Collections.Generic.List[string]
+    foreach ($ip in (Get-PaketTerazileri)) {
+        $r = Send-Paket $ip $pk "W30:O0001"
+        Log "Icerik $kod -> $ip : $r"
+        [void]$sonuc.Add($(if ($r -eq "OK") { "OK $ip" } else { "FAIL $ip $r" }))
+    }
+    return , $sonuc
+}
+
 function Set-Icerik($ctx) {
     $b = Read-JsonBody $ctx
     $pinState = Test-Pin ([string]$b["pin"])
@@ -410,7 +470,16 @@ function Set-Icerik($ctx) {
     $ip = [string]$ctx.Request.RemoteEndPoint.Address
     Add-Content -Path $changeLog -Value ("{0:yyyy-MM-dd HH:mm:ss};ICERIK;{1};{2};{3}" -f (Get-Date), $kod, ($res -split " ")[1], $ip) -Encoding UTF8
     Log "Icerik kaydedildi: $kod ($res, $ip)"
-    SendJson $ctx 200 @{ ok = $true; kod = $kod; yeni = [bool]($res -like "OK icerik-eklendi*") }
+    $teraziMesaj = ""
+    if ([bool]$b["gonder"]) {
+        $lines = Send-Icerik $kod $metin
+        $ok = @($lines | Where-Object { $_ -like "OK *" } | ForEach-Object { ($_ -split " ")[1] })
+        $bad = @($lines | Where-Object { $_ -like "FAIL *" } | ForEach-Object { ($_ -split " ")[1] })
+        if ($bad.Count -eq 0 -and $ok.Count -gt 0) { $teraziMesaj = "Paket terazilerine gonderildi (" + ($ok -join ", ") + ")." }
+        elseif ($ok.Count -gt 0) { $teraziMesaj = "Gonderildi: " + ($ok -join ", ") + ". Ulasilamadi: " + ($bad -join ", ") + ", onlar icin CL Works'te Gonder'e basin." }
+        else { $teraziMesaj = "Paket terazilerine ulasilamadi (" + ($bad -join ", ") + "). CL Works'te Gonder'e basin." }
+    }
+    SendJson $ctx 200 @{ ok = $true; kod = $kod; yeni = [bool]($res -like "OK icerik-eklendi*"); teraziMesaj = [string]$teraziMesaj }
 }
 
 function Add-Unit($ctx) {

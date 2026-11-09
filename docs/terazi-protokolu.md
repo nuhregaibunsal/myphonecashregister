@@ -57,3 +57,15 @@ FixedWeight (T3'te 12, T4'te 54 girildi) pakette hiç yok; bu komutla gönderilm
 13 alan dört testte de 0/boş, çünkü test ürünlerinde karşılık gelen sütunlar (GroupNo, LabelNo, OriginNo, Tare, BarcodeID, SpecialPrice, Name2... adayları) boştu. Göndericide bunlar 0 gidiyor; bu sütunları dolu olan bir ürüne gönderilirse o bilgiler terazide sıfırlanır. Eşlemek için:
 1. `canli/cl-istatistik.ps1` ile dükkânda hangi sütunların gerçekten dolu olduğu ölçülür.
 2. Dolu olan sütunlara bir test ürününde **birbirinden farklı** değerler verilip tek yakalama yapılır; her değer tek bir alana düşeceği için eşleme kesinleşir.
+
+## İçerik (içindekiler) gönderimi: W30
+Yakalama: içerik 1 ve 3, 192.168.1.204'e. Her ikisi de bayt bayt tahminle aynı çıktı (315 ve 319 bayt).
+
+```
+W30F01,<kod 4 hex>L<gövde uzunluğu 3 hex>:X=00.D=<metin uzunluğu 3 hex>.<metin><XOR>
+```
+- Metin CL'deki IngText, satır sonları `\r\n` → `\n`, Windows-1254.
+- Gövde = `X=00.D=xxx.` + metin; XOR gövde baytları üzerinden (başlık hariç), W02 ile aynı.
+- Kod onaltılık kabul edildi (W02'deki PLU gibi); 10 ve üstü kodla henüz doğrulanmadı.
+- Terazi cevabı: `W30:O0001` (içerik 1 ve 3 için aynı, yani kod değil "tamam" anlamında).
+- Paket terazileri: 192.168.1.153 (Paket Yeni), 192.168.1.204 (Terazi Paket İçin). Değiştirmek için C:\FiyatGor\paket-terazi.txt.
