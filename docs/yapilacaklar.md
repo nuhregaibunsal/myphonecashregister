@@ -6,7 +6,7 @@
 - [ ] Fiyat sorguda bulunamayan ürün için ＋ Ekle düğmesi.
 
 ### Yapılacak
-- [ ] Mobil uygulama: şu an site güvenilmeyen (kendi imzalı) sertifikayla açıldığı için telefon uygulama olarak yüklemiyor, sadece adres kısayolu ekliyor. 1. adım: Tailscale'in ücretsiz geçerli sertifikasıyla (kasa-bilgisayari.xxx.ts.net adresi, tailscale cert) siteyi açmak; böylece "Uygulamayı yükle" çıkar, adres çubuğu olmadan tam ekran çalışır. Yetmezse Android uygulaması (APK) olarak paketlemek.
+- [ ] Mobil uygulama: Cloudflare Tunnel + Access ile https://fiyat.<alan adı> (docs/cloudflare-kurulum.md). Alan adı .com, otomatik yenileme kapalı; bitişe 30 gün kala uygulamada uyarı (C:\FiyatGor\alanadi.txt). Telefonlarda "Ana ekrana ekle". Kasa için de aynı uygulama (masaüstü ayrı program gerekmez); ileride Trendyol/Yemeksepeti ekranları buna eklenecek.
 - [ ] Telefondan stok girişi (mal kabul): ürünü okutup gelen miktarı Vega'ya işleme. Vega'nın stok girişini nasıl kaydettiği incelenecek.
 
 ### Dükkan sahibi elle yapacak

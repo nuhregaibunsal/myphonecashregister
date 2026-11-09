@@ -555,6 +555,26 @@ SELECT @yeni AS sonuc, N'' AS neden, N'' AS ad;
     SendJson $ctx 200 @{ ok = $true; ind = [int]$sonuc }
 }
 
+$alanFile = Join-Path $root "alanadi.txt"
+$script:alanBilgi = $null
+$script:alanAt = [datetime]::MinValue
+
+function Get-AlanAdi {
+    if (-not (Test-Path $alanFile)) { return $null }
+    $alan = ([System.IO.File]::ReadAllText($alanFile)).Trim().ToLowerInvariant()
+    if (-not $alan -or $alan -notmatch '^[a-z0-9-]+(\.[a-z0-9-]+)+$') { return $null }
+    if ($script:alanBilgi -and $script:alanBilgi.alan -eq $alan -and ((Get-Date) - $script:alanAt).TotalHours -lt 12) { return $script:alanBilgi }
+    $bitis = $null
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        $r = Invoke-RestMethod -Uri ("https://rdap.org/domain/" + $alan) -TimeoutSec 15 -UseBasicParsing
+        foreach ($e in @($r.events)) { if ($e.eventAction -eq "expiration") { $bitis = [datetime]$e.eventDate } }
+    } catch { Log "Alan adi bitis tarihi okunamadi: $($_.Exception.Message)" }
+    $script:alanBilgi = @{ alan = $alan; bitis = $bitis }
+    $script:alanAt = Get-Date
+    return $script:alanBilgi
+}
+
 function Get-LabelData([int]$ind) {
     $conn = New-Object System.Data.SqlClient.SqlConnection($connStr)
     try {
@@ -1053,6 +1073,14 @@ function Handle($ctx) {
             Log "Fiyat degistirilemedi: $($_.Exception.Message)"
             SendJson $ctx 500 @{ ok = $false; error = "Fiyat degistirilemedi: $($_.Exception.Message)" }
         }
+        return
+    }
+    if ($path -eq "/api/alanadi") {
+        $a = Get-AlanAdi
+        if (-not $a) { SendJson $ctx 200 @{ ok = $true; alan = "" }; return }
+        if (-not $a.bitis) { SendJson $ctx 200 @{ ok = $true; alan = [string]$a.alan; bitis = ""; kalanGun = -1 }; return }
+        $kalan = [int][math]::Floor(($a.bitis.ToUniversalTime() - (Get-Date).ToUniversalTime()).TotalDays)
+        SendJson $ctx 200 @{ ok = $true; alan = [string]$a.alan; bitis = $a.bitis.ToString("dd.MM.yyyy"); kalanGun = $kalan }
         return
     }
     if ($path -eq "/api/durum") {

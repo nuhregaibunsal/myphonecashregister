@@ -1198,10 +1198,24 @@
     fMsg(r && r.scale ? "Bu bir terazi etiketi. Ürünü isimle arayın." : "Bulunamadı: " + code, "err");
   }
 
+  async function alanAdiKontrol() {
+    try {
+      const res = await fetch("api/alanadi", { cache: "no-store" });
+      const j = await res.json();
+      if (!j || !j.ok || !j.alan || !(j.kalanGun >= 0) || j.kalanGun > 30) return;
+      const bugun = new Date().toISOString().slice(0, 10);
+      if (store.get("alanUyariGun", "") === bugun) return;
+      $("alanUyariYazi").textContent = j.alan + " alan adının süresi " + j.bitis + " tarihinde bitiyor (" + j.kalanGun + " gün kaldı). Kullanmaya devam edecekseniz Cloudflare'den yenileyin.";
+      $("alanUyari").hidden = false;
+      $("alanUyariKapat").onclick = () => { $("alanUyari").hidden = true; store.set("alanUyariGun", bugun); };
+    } catch (e) { }
+  }
+
   async function startLive() {
     if (await syncLive()) {
       await loadRights();
       updatePriceTab();
+      alanAdiKontrol();
       renderInfo();
       liveTimer = setInterval(syncLive, 60000);
       document.addEventListener("visibilitychange", () => { if (!document.hidden) syncLive(); });

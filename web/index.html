@@ -11,6 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -19,6 +20,7 @@
   <span id="dbInfo" class="muted"></span>
 </header>
 
+<div class="alanuyari" id="alanUyari" hidden><span id="alanUyariYazi"></span><button type="button" id="alanUyariKapat" aria-label="Kapat">✕</button></div>
 <main>
     <div class="scanner" id="scanner" hidden>
       <video id="video" playsinline muted></video>
