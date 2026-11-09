@@ -1,4 +1,4 @@
-const CACHE = "fiyatgor-v42";
+const CACHE = "fiyatgor-v43";
 const FILES = [
   "./",
   "index.html",
@@ -29,6 +29,7 @@ self.addEventListener("activate", e => {
 
 self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
+  if (new URL(e.request.url).pathname.includes("/api/")) return;
   e.respondWith(
     fetch(e.request).then(res => {
       const copy = res.clone();

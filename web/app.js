@@ -263,7 +263,7 @@
       setTimeout(() => $("fNew").focus(), 50);
     } catch (e) {
       $("fInfo").textContent = "";
-      fMsg("Ürünün birimleri okunamadı: " + e.message, "err");
+      fMsg(/JSON|DOCTYPE|Failed to fetch|NetworkError/i.test(e.message) ? "Kasa bilgisayarına ulaşılamadı. Sunucu kapalı ya da yeniden başlıyor olabilir; biraz sonra tekrar dene." : "Ürünün birimleri okunamadı: " + e.message, "err");
     }
   }
 
