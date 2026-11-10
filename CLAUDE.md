@@ -53,5 +53,5 @@ Bu dosya her oturumun başında okunur. Bu projede neyin neden böyle olduğunu 
 - Bitenler ve bekleyenler: `docs/yapilacaklar.md` (her işten sonra güncelle).
 - Stok sekmesi (devir giriş fişi) dükkanda denendi: Çörek Otu Yağı'na 2 × 12 = 24 adet girildi (fiş A0000006), 4 tablo Vega'nın kayıtlarıyla birebir; sadece FIYATI 7-8. ondalık yuvarlaması düzeltildi (Vega keser). Vega'da kalan 54 olarak doğrulandı, iş bitti.
 - Dönem devri yazıldı (Stok sekmesi → Dönem devri, /api/devir): kaynak dönem kalanları (SUM ENVANTER > 0) hedef döneme tek fişle; işaret BASLIK.ALTBELGENO = 'DEVIR-<kaynak>' ile ikinci kez engellenir. Sadece önizleme denendi; gerçek devir yılbaşında.
-- Sıradaki: Yemeksepeti/Trendyol entegrasyonu, yapay zekâ içerik taslağı (Gemini + Open Food Facts; sadece taslak, anahtar kasada).
+- Sıradaki: Yemeksepeti/Trendyol entegrasyonu, yapay zekâ içerik taslağı (değerler TürKomp / USDA FoodData Central / Open Food Facts'ten, Gemini sadece eşleştirme ve metin; sadece taslak, anahtarlar kasada).
 - Commit geçmişindeki eski Claude satırları temizlendi ve kullanıcı onayıyla force push edildi.

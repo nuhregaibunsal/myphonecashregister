@@ -8,7 +8,7 @@
 
 
 ### Yapılacak
-- [ ] Yapay zekâ ile içerik taslağı: İçerik ekranında "Taslak oluştur" düğmesi. Ürün adından Gemini API (ücretsiz kota) içindekiler, alerjen ve 100 g besin değerlerini tahmin edip kutuları doldurur; barkodlu markalı ürünlerde önce Open Food Facts'ten gerçek değerler denenir. Sadece taslak: kullanıcı kontrol edip Kaydet'e basmadan CL'ye/teraziye gitmez, ekranda "yapay zekâ tahmini, kontrol et" uyarısı. API anahtarı kasada C:\FiyatGor içinde, istek sunucu üzerinden; anahtar sohbete yazılmaz.
+- [ ] Yapay zekâ ile içerik taslağı: İçerik ekranında "Taslak oluştur". Besin değerleri önce gerçek veri setlerinden: genel ürünler (fındık, leblebi, çekirdek…) için TürKomp (Ulusal Gıda Kompozisyon Veri Tabanı) ve USDA FoodData Central (ücretsiz API, kamu malı); barkodlu markalı ürünler için Open Food Facts. Gemini sadece ürün adını doğru veri seti kaydıyla eşleştirir (ör. "çifte kavrulmuş fındık" → kavrulmuş fındık), içindekiler/alerjen taslağı yazar ve karışımlarda oranlı hesap önerir. Her şey taslak: kullanıcı kontrol edip Kaydet'e basmadan CL'ye/teraziye gitmez; kaynak ekranda yazar. API anahtarları kasada C:\FiyatGor içinde, istekler sunucu üzerinden.
 - [ ] Yemeksepeti ve Trendyol entegrasyonu: siparişleri/ürün-fiyat-stok eşitlemesini kasa sunucusu üzerinden yapmak (Trendyol'un açık satıcı API'si var; Yemeksepeti iş ortağı onayı gerektirir). Ekranlar aynı uygulamaya eklenecek, ayrı masaüstü programı gerekmez.
 
 ### Dükkan sahibi elle yapacak
