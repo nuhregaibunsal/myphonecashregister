@@ -235,3 +235,6 @@ summary { cursor: pointer; color: var(--muted); padding: 6px 0; }
 .baglanti .btn { flex: 0 0 auto; background: var(--label); color: var(--label-ink); border-color: var(--label); }
 .top .muted.kopuk { color: #ffb4a8; opacity: 1; }
 @media (min-width: 900px) { .baglanti { padding-left: 24px; } }
+#devirBox summary { color: var(--text); font-weight: 650; }
+#dvListe { max-height: 320px; overflow: auto; margin-bottom: 10px; }
+#dvListe li { cursor: default; }

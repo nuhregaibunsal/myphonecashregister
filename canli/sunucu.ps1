@@ -684,6 +684,158 @@ SELECT @bas AS sonuc, @belge AS belge, @kalan AS kalan;
     SendJson $ctx 200 @{ ok = $true; belge = $belge; kalan = [double]$kalan; miktar = [double]$miktar }
 }
 
+function Get-Donemler {
+    $conn = New-Object System.Data.SqlClient.SqlConnection($connStr)
+    $liste = New-Object System.Collections.Generic.List[string]
+    try {
+        $conn.Open()
+        $cmd = $conn.CreateCommand()
+        $cmd.CommandText = "SELECT LEFT(name, 10) FROM sys.tables WHERE name LIKE 'F0101D[0-9][0-9][0-9][0-9]TBLDEPOENVANTER' ORDER BY name"
+        $r = $cmd.ExecuteReader()
+        $adlar = @(); while ($r.Read()) { $adlar += [string]$r[0] }
+        $r.Close()
+        foreach ($d in $adlar) {
+            if ($d -notmatch '^F0101D\d{4}$') { continue }
+            $c = $conn.CreateCommand()
+            $c.CommandText = "SELECT MIN(TARIH), MAX(TARIH), COUNT(*) FROM dbo.${d}TBLDEPOENVANTER"
+            $q = $c.ExecuteReader()
+            $ilk = ""; $son = ""; $n = 0
+            if ($q.Read()) {
+                if (-not $q.IsDBNull(0)) { $ilk = ([datetime]$q[0]).ToString("dd.MM.yyyy") }
+                if (-not $q.IsDBNull(1)) { $son = ([datetime]$q[1]).ToString("dd.MM.yyyy") }
+                $n = [int]$q[2]
+            }
+            $q.Close()
+            [void]$liste.Add(('{"ad":' + (J $d) + ',"ilk":' + (J $ilk) + ',"son":' + (J $son) + ',"satir":' + $n + '}'))
+        }
+    } finally { $conn.Close() }
+    return ,([System.Text.Encoding]::UTF8.GetBytes('{"ok":true,"donemler":[' + ($liste -join ",") + '],"guncel":' + (J (Get-Donem)) + '}'))
+}
+
+function Test-DonemAdi([string]$d) {
+    if ($d -notmatch '^F0101D\d{4}$') { return $false }
+    $conn = New-Object System.Data.SqlClient.SqlConnection($connStr)
+    try {
+        $conn.Open()
+        $cmd = $conn.CreateCommand()
+        $cmd.CommandText = "SELECT COUNT(*) FROM sys.tables WHERE name IN (@a + 'TBLDEPOENVANTER', @a + 'TBLDEVGIRBASLIK', @a + 'TBLDEVGIRHAREKET', @a + 'TBLSTOKHAREKETLERI')"
+        [void]$cmd.Parameters.AddWithValue("@a", $d)
+        return ([int]$cmd.ExecuteScalar() -eq 4)
+    } finally { $conn.Close() }
+}
+
+function Get-DevirOnizle([string]$K, [string]$H) {
+    $conn = New-Object System.Data.SqlClient.SqlConnection($connStr)
+    try {
+        $conn.Open()
+        $cmd = $conn.CreateCommand()
+        $cmd.CommandText = @"
+DECLARE @o int = (SELECT COUNT(*) FROM dbo.${H}TBLDEVGIRBASLIK WHERE ALTBELGENO = @isaret AND ISNULL(IPTAL, 0) = 0);
+SELECT COUNT(*) AS urun, ISNULL(SUM(x.kalan), 0) AS toplam, @o AS onceki
+FROM (SELECT e.STOKNO, SUM(e.ENVANTER) AS kalan FROM dbo.${K}TBLDEPOENVANTER e GROUP BY e.STOKNO HAVING SUM(e.ENVANTER) > 0) x
+JOIN dbo.F0101TBLSTOKLAR s ON s.IND = x.STOKNO JOIN dbo.F0101TBLBIRIMLEREX b ON b.IND = s.ANABIRIM WHERE ISNULL(s.DELETED, 0) = 0;
+SELECT TOP 300 s.MALINCINSI, s.STOKKODU, b.BIRIMADI, x.kalan
+FROM (SELECT e.STOKNO, SUM(e.ENVANTER) AS kalan FROM dbo.${K}TBLDEPOENVANTER e GROUP BY e.STOKNO HAVING SUM(e.ENVANTER) > 0) x
+JOIN dbo.F0101TBLSTOKLAR s ON s.IND = x.STOKNO JOIN dbo.F0101TBLBIRIMLEREX b ON b.IND = s.ANABIRIM
+WHERE ISNULL(s.DELETED, 0) = 0 ORDER BY s.MALINCINSI;
+"@
+        [void]$cmd.Parameters.AddWithValue("@isaret", "DEVIR-" + $K)
+        $r = $cmd.ExecuteReader()
+        $urun = 0; $toplam = 0; $onceki = 0
+        if ($r.Read()) { $urun = [int]$r["urun"]; $toplam = [double]$r["toplam"]; $onceki = [int]$r["onceki"] }
+        [void]$r.NextResult()
+        $satirlar = New-Object System.Collections.Generic.List[string]
+        while ($r.Read()) { [void]$satirlar.Add(('{"ad":' + (J ([string]$r["MALINCINSI"])) + ',"kod":' + (J ([string]$r["STOKKODU"])) + ',"birim":' + (J ([string]$r["BIRIMADI"])) + ',"kalan":' + (N $r["kalan"]) + '}')) }
+        $r.Close()
+        $json = '{"ok":true,"kaynak":' + (J $K) + ',"hedef":' + (J $H) + ',"urun":' + $urun + ',"toplam":' + (N $toplam) + ',"onceki":' + $onceki + ',"satirlar":[' + ($satirlar -join ",") + ']}'
+        return ,([System.Text.Encoding]::UTF8.GetBytes($json))
+    } finally { $conn.Close() }
+}
+
+function Invoke-Devir($ctx) {
+    $b = Read-JsonBody $ctx
+    $pinState = Test-Pin ([string]$b["pin"])
+    if ($pinState -eq "kapali") { SendJson $ctx 403 @{ ok = $false; error = "Degistirme kapali. Kurulumda PIN belirlenmedi." }; return }
+    if ($pinState -eq "kilitli") { SendJson $ctx 423 @{ ok = $false; error = "Cok fazla yanlis PIN. 5 dakika bekleyin." }; return }
+    if ($pinState -ne "ok") { SendJson $ctx 401 @{ ok = $false; error = "PIN yanlis." }; return }
+    $K = [string]$b["kaynak"]; $H = [string]$b["hedef"]
+    if ($K -eq $H -or -not (Test-DonemAdi $K) -or -not (Test-DonemAdi $H)) { SendJson $ctx 400 @{ ok = $false; error = "Donem secimi gecersiz." }; return }
+    if ([int]($K.Substring(6)) -ge [int]($H.Substring(6))) { SendJson $ctx 400 @{ ok = $false; error = "Kaynak donem hedef donemden once olmali." }; return }
+    $sql = @"
+SET XACT_ABORT ON;
+BEGIN TRAN;
+IF EXISTS (SELECT 1 FROM dbo.${H}TBLDEVGIRBASLIK WITH (UPDLOCK, HOLDLOCK) WHERE ALTBELGENO = @isaret AND ISNULL(IPTAL, 0) = 0) BEGIN ROLLBACK; SELECT -2 AS sonuc, N'' AS belge, 0 AS adet, CAST(0 AS decimal(28, 8)) AS toplam; RETURN; END;
+DECLARE @now datetime = GETDATE();
+DECLARE @gun datetime = DATEADD(day, DATEDIFF(day, 0, @now), 0);
+DECLARE @sn datetime = DATEADD(ms, -DATEPART(ms, @now), @now);
+DECLARE @k TABLE (STOKNO int PRIMARY KEY, KALAN decimal(28, 8), AD nvarchar(400), KOD nvarchar(100), TIP int, ALIS decimal(28, 8), AKDV int, BI int, BADI nvarchar(100), FIYATI decimal(28, 8), SIRA int);
+INSERT INTO @k (STOKNO, KALAN, AD, KOD, TIP, ALIS, AKDV, BI, BADI, FIYATI, SIRA)
+SELECT x.STOKNO, x.kalan, s.MALINCINSI, s.STOKKODU, ISNULL(s.STOKTIPI, 0), ISNULL(s.ALISFIYATI, 0), ISNULL(s.ALISKDVORANI, 0), b.IND, b.BIRIMADI,
+  CASE WHEN ISNULL(b.KDVDAHIL, 0) = 1 AND ISNULL(b.KDV, 0) > -100 THEN ROUND(CAST(ISNULL(b.SATISFIYATI1, 0) AS decimal(20, 8)) / CAST(1 + ISNULL(b.KDV, 0) / 100.0 AS decimal(10, 6)), 8, 1) ELSE ISNULL(b.SATISFIYATI1, 0) END,
+  ROW_NUMBER() OVER (ORDER BY s.MALINCINSI)
+FROM (SELECT e.STOKNO, SUM(e.ENVANTER) AS kalan FROM dbo.${K}TBLDEPOENVANTER e GROUP BY e.STOKNO HAVING SUM(e.ENVANTER) > 0) x
+JOIN dbo.F0101TBLSTOKLAR s ON s.IND = x.STOKNO JOIN dbo.F0101TBLBIRIMLEREX b ON b.IND = s.ANABIRIM
+WHERE ISNULL(s.DELETED, 0) = 0;
+DECLARE @adet int = (SELECT COUNT(*) FROM @k);
+IF @adet = 0 BEGIN ROLLBACK; SELECT -3 AS sonuc, N'' AS belge, 0 AS adet, CAST(0 AS decimal(28, 8)) AS toplam; RETURN; END;
+DECLARE @no int = (SELECT ISNULL(MAX(CASE WHEN BELGENO LIKE 'A%' AND LEN(BELGENO) BETWEEN 2 AND 12 AND SUBSTRING(BELGENO, 2, 20) NOT LIKE '%[^0-9]%' THEN CAST(SUBSTRING(BELGENO, 2, 20) AS int) END), 0) + 1 FROM dbo.${H}TBLDEVGIRBASLIK WITH (UPDLOCK, HOLDLOCK));
+DECLARE @belge nvarchar(20) = N'A' + RIGHT(N'0000000' + CAST(@no AS nvarchar(10)), 7);
+DECLARE @firma int = 2, @oz1 nvarchar(100) = N'MERKEZ', @oz2 nvarchar(100) = N'MERKEZ', @user int = 100, @hdepo int = 1;
+SELECT TOP 1 @firma = ISNULL(FIRMANO, 2), @oz1 = ISNULL(OZELKOD1, N'MERKEZ'), @oz2 = ISNULL(OZELKOD2, N'MERKEZ'), @user = ISNULL(USERNO, 100), @hdepo = ISNULL(HAREKETDEPOSU, 1)
+FROM dbo.${K}TBLDEVGIRBASLIK WHERE BELGETIPI = 90 AND TUTAR IS NOT NULL ORDER BY IND DESC;
+DECLARE @top decimal(28, 8) = (SELECT ISNULL(SUM(KALAN * ALIS), 0) FROM @k);
+DECLARE @tutar decimal(28, 8) = (SELECT ISNULL(SUM(KALAN * ALIS * (1 + AKDV / 100.0)), 0) FROM @k);
+INSERT INTO dbo.${H}TBLDEVGIRBASLIK (FIRMAADI, TUTAR, BELGENO, TARIH, KDV, AK, ENVANTERUPDATE, ODEMETARIHI, ODMODIFIED, ALTBELGENO, ALTBELGETARIHI, ALT1, ALT2, ALT3, ALT4, DEPO, SUCCESS, OZELKOD, OZELKOD1, OZELKOD2,
+  KALEM1, KALEM2, KALEM3, KALEM4, IADE, IPTAL, CONVERTED, CREDATE, LADATE, FIRMANO, PARABIRIMI, KUR, YUVARLAMA, ALLOWYUVARLAMA, ODENEN, GIRIS, BELGETIPI, EKBELGETIPI, SELECTED,
+  MASRAF1, MASRAF2, MASRAF3, MASRAF4, MASRAFKDV1, MASRAFKDV2, MASRAFKDV3, MASRAFKDV4, ENTEGRE, USERNO, KDVISK, SATISSEKLI, ARATOPLAM, KONSOLIDE, ODEMEOPSIYONU, TEVKIFATORAN, STATUS,
+  YURTDISI, MUHASEBELESMEYECEK, OZELKOD3, OZELKOD4, HAREKETDEPOSU, KAYNAK, OZELKOD5, OZELKOD6, OZELKOD7, OZELKOD8, OZELKOD9, STOKHAREKETEYAZ, CARIHAREKETEYAZ, UID)
+VALUES (NULL, @tutar, @belge, @gun, 0, 0, NULL, @gun, 0, @isaret, NULL, 0, 0, 0, 0, NULL, NULL, NULL, @oz1, @oz2,
+  NULL, NULL, NULL, NULL, 0, 0, 0, @sn, @sn, @firma, N'TL', 1, 0, 0, 0, 1, 90, 0, NULL,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, @user, NULL, 0, @top, NULL, NULL, NULL, NULL,
+  0, 0, NULL, NULL, @hdepo, 0, NULL, NULL, NULL, NULL, NULL, 1, 1, N'{' + CAST(NEWID() AS nvarchar(40)) + N'}');
+DECLARE @bas int = SCOPE_IDENTITY();
+DECLARE @h TABLE (IND int, STOKNO int);
+INSERT INTO dbo.${H}TBLDEVGIRHAREKET (TARIH, DETAY, SELECTED, EVRAKNO, FIRMANO, STOKNO, MALINCINSI, STOKKODU, STOKTIPI, MIKTAR, BIRIMMIKTAR, BIRIM, BIRIMEX, KDV, KDVTUTARI,
+  ISK1, ISK2, ISK3, ISK4, AFIYATI, FIYATI, GERCEKTOPLAM, DEPO, PERSONEL, PIRIM, OPSIYON, PROMOSYON, SATISKOSULU, SERIMIKTAR, ENVANTER, KARSISTOKKODU, KARSIBARKOD, TERMIN, TAKSIT,
+  PARABIRIMI, KUR, BARKOD, PESINAT, MASRAF, MASRAFKDV, ACIKLAMA, OIV, INDIRIM, OTV, HURDAINDIRIMI, GUMRUKVERGISI, DIGERVERGILER, MIKTARSTR, GK, GRUPMIKTAR, ISK5, ISK6, UID, SATIRNO)
+OUTPUT inserted.IND, inserted.STOKNO INTO @h (IND, STOKNO)
+SELECT @gun, 0, NULL, @bas, @firma, STOKNO, AD, KOD, TIP, KALAN, 1, BADI, BI, AKDV, NULL,
+  0, 0, 0, 0, ALIS, FIYATI, KALAN * ALIS, @hdepo, 0, 0, 0, 0, 1, 1, KALAN, N'', NULL, NULL, NULL,
+  N'TL', 1, N'', NULL, 0, NULL, NULL, 0, 0, 0, NULL, NULL, NULL, NULL, CHECKSUM(NEWID()), 1, 0, 0, NULL, NULL
+FROM @k ORDER BY SIRA;
+INSERT INTO dbo.${H}TBLSTOKHAREKETLERI (EVRAKNO, IZAHAT, TARIH, GIREN, CIKAN, KALAN, TUTAR, FIRMANO, STOKNO, BELGENO, LN, DEPO, KDV, SERINO, PERSONEL, IADE, OPSIYON,
+  BIRIMFIYAT, BIRIMMALIYET, SIRALAMATARIHI, KUR, PARABIRIMI, BIRIMEX, ACIKLAMA, STOKTIPI, SIRALAMATARIHIEX, SATISBIRIMMALIYETI)
+SELECT @belge, N'90', @gun, k.KALAN, 0, NULL, k.KALAN * k.ALIS, @firma, k.STOKNO, @bas, h.IND, @hdepo, k.AKDV, NULL, 0, 0, 0,
+  k.ALIS, k.ALIS, @now, 1, N'TL', k.BI, N'', k.TIP, CAST(CAST(@now AS float) + 2 AS decimal(28, 8)), NULL
+FROM @k k JOIN @h h ON h.STOKNO = k.STOKNO;
+INSERT INTO dbo.${H}TBLDEPOENVANTER (TARIH, STOKNO, DEPO, ENVANTER, BELGETIPI, BELGEIND, SIRALAMATARIHI, SIRALAMATARIHIEX, HAREKETIND)
+SELECT @gun, k.STOKNO, @hdepo, k.KALAN, 90, @bas, @sn, CAST(CAST(@sn AS float) + 2 AS decimal(28, 8)), h.IND
+FROM @k k JOIN @h h ON h.STOKNO = k.STOKNO;
+DECLARE @toplam decimal(28, 8) = (SELECT SUM(KALAN) FROM @k);
+COMMIT;
+SELECT @bas AS sonuc, @belge AS belge, @adet AS adet, @toplam AS toplam;
+"@
+    $conn = New-Object System.Data.SqlClient.SqlConnection($connStr)
+    $sonuc = 0; $belge = ""; $adet = 0; $toplam = 0
+    try {
+        $conn.Open()
+        $cmd = $conn.CreateCommand()
+        $cmd.CommandTimeout = 300
+        $cmd.CommandText = $sql
+        [void]$cmd.Parameters.AddWithValue("@isaret", "DEVIR-" + $K)
+        $r = $cmd.ExecuteReader()
+        if ($r.Read()) { $sonuc = [int]$r["sonuc"]; $belge = [string]$r["belge"]; $adet = [int]$r["adet"]; $toplam = [double]$r["toplam"] }
+        $r.Close()
+    } finally { $conn.Close() }
+    if ($sonuc -eq -2) { SendJson $ctx 409 @{ ok = $false; error = "Bu donemden devir daha once yapilmis. Ikinci kez yapilmaz." }; return }
+    if ($sonuc -eq -3) { SendJson $ctx 400 @{ ok = $false; error = "Kaynak donemde kalani olan urun yok." }; return }
+    if ($sonuc -le 0) { SendJson $ctx 500 @{ ok = $false; error = "Devir yapilamadi." }; return }
+    $ip = [string]$ctx.Request.RemoteEndPoint.Address
+    Add-Content -Path $changeLog -Value ("{0:yyyy-MM-dd HH:mm:ss};DEVIR;{1};{2};{3};{4};{5}" -f (Get-Date), $K, $H, $belge, $adet, $ip) -Encoding UTF8
+    Log "Devir: $K -> $H, $adet urun, $belge ($ip)"
+    SendJson $ctx 200 @{ ok = $true; belge = $belge; adet = $adet; toplam = $toplam }
+}
+
 function Get-LabelData([int]$ind) {
     $conn = New-Object System.Data.SqlClient.SqlConnection($connStr)
     try {
@@ -1181,6 +1333,21 @@ function Handle($ctx) {
         try { Set-Price $ctx } catch {
             Log "Fiyat degistirilemedi: $($_.Exception.Message)"
             SendJson $ctx 500 @{ ok = $false; error = "Fiyat degistirilemedi: $($_.Exception.Message)" }
+        }
+        return
+    }
+    if ($path -eq "/api/devir") {
+        try {
+            if ($ctx.Request.HttpMethod -eq "POST") { Invoke-Devir $ctx }
+            else {
+                $K = [string]$ctx.Request.QueryString["kaynak"]; $H = [string]$ctx.Request.QueryString["hedef"]
+                if (-not $K) { Send $ctx 200 "application/json; charset=utf-8" (Get-Donemler) $true }
+                elseif ($K -eq $H -or -not (Test-DonemAdi $K) -or -not (Test-DonemAdi $H)) { SendJson $ctx 400 @{ ok = $false; error = "Donem secimi gecersiz." } }
+                else { Send $ctx 200 "application/json; charset=utf-8" (Get-DevirOnizle $K $H) $true }
+            }
+        } catch {
+            Log "Devir hatasi: $($_.Exception.Message)"
+            SendJson $ctx 500 @{ ok = $false; error = [string]$_.Exception.Message }
         }
         return
     }

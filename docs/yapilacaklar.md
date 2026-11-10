@@ -2,6 +2,7 @@
 
 ## Bekleyen
 ### Dükkanda denenecek (yazıldı)
+- [ ] Dönem devri (Stok → Dönem devri): kaynak dönemde SUM(DEPOENVANTER.ENVANTER) > 0 olan ürünler hedef döneme tek devir giriş fişiyle (ALTBELGENO = DEVIR-<kaynak>, ikinci kez engellenir). Şimdilik sadece Önizle denenecek; Devret yılbaşında, Vega yeni dönemi açtıktan ve izin.sql yeniden çalıştırıldıktan sonra.
 - [ ] Etiket yeni hali (kalın/büyük yazılar, Türkiye yazımında Yerli Üretim logosu) tekrar basılıp bakılacak.
 - [ ] Fiyat sorguda bulunamayan ürün için ＋ Ekle düğmesi.
 
@@ -9,7 +10,6 @@
 ### Yapılacak
 - [ ] Yapay zekâ ile içerik taslağı: İçerik ekranında "Taslak oluştur" düğmesi. Ürün adından Gemini API (ücretsiz kota) içindekiler, alerjen ve 100 g besin değerlerini tahmin edip kutuları doldurur; barkodlu markalı ürünlerde önce Open Food Facts'ten gerçek değerler denenir. Sadece taslak: kullanıcı kontrol edip Kaydet'e basmadan CL'ye/teraziye gitmez, ekranda "yapay zekâ tahmini, kontrol et" uyarısı. API anahtarı kasada C:\FiyatGor içinde, istek sunucu üzerinden; anahtar sohbete yazılmaz.
 - [ ] Yemeksepeti ve Trendyol entegrasyonu: siparişleri/ürün-fiyat-stok eşitlemesini kasa sunucusu üzerinden yapmak (Trendyol'un açık satıcı API'si var; Yemeksepeti iş ortağı onayı gerektirir). Ekranlar aynı uygulamaya eklenecek, ayrı masaüstü programı gerekmez.
-- [ ] Devir: yeni dönem açılınca (yılbaşı) önceki dönemde kalan miktarları tek tuşla yeni döneme devir giriş fişi olarak aktarma.
 
 ### Dükkan sahibi elle yapacak
 - [ ] CL'de aynı ürün kodlu ve fiyatı farklı ürünlerin temizliği (126 kod, 108'inde fiyat farklı; PLU 1000 ve 9994-9999 gibi kopyalar).

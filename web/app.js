@@ -903,6 +903,93 @@
     });
   }
 
+  let devirVeri = null, donemListesi = null;
+  function dvMsg(text, kind) { $("dvMsg").textContent = text || ""; $("dvMsg").className = "msg " + (kind || ""); }
+  const donemEtiket = d => d.ad.slice(5) + (d.ilk ? " · " + d.ilk + " – " + d.son : " · boş") + " · " + d.satir + " kayıt";
+
+  async function devirDonemler() {
+    if (donemListesi) return;
+    dvMsg("Dönemler okunuyor…");
+    try {
+      const res = await fetch("api/devir", { cache: "no-store" });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.ok) throw new Error(j.error || ("HTTP " + res.status));
+      donemListesi = j.donemler || [];
+      ["dvKaynak", "dvHedef"].forEach(id => {
+        const sel = $(id);
+        sel.innerHTML = "";
+        donemListesi.forEach(d => { const o = document.createElement("option"); o.value = d.ad; o.textContent = donemEtiket(d); sel.appendChild(o); });
+      });
+      const gi = donemListesi.findIndex(d => d.ad === j.guncel);
+      $("dvHedef").value = j.guncel;
+      if (gi > 0) $("dvKaynak").value = donemListesi[gi - 1].ad;
+      dvMsg("");
+    } catch (e) {
+      donemListesi = null;
+      dvMsg("Dönemler okunamadı: " + e.message, "err");
+    }
+  }
+
+  async function devirOnizle() {
+    const k = $("dvKaynak").value, h = $("dvHedef").value;
+    $("dvSonuc").hidden = true;
+    devirVeri = null;
+    if (!k || !h || k === h) { dvMsg("Kaynak ve hedef farklı dönemler olmalı.", "err"); return; }
+    if (k > h) { dvMsg("Kaynak dönem hedef dönemden önce olmalı.", "err"); return; }
+    dvMsg("Hesaplanıyor…");
+    try {
+      const res = await fetch("api/devir?kaynak=" + encodeURIComponent(k) + "&hedef=" + encodeURIComponent(h), { cache: "no-store" });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.ok) throw new Error(j.error || ("HTTP " + res.status));
+      devirVeri = j;
+      dvMsg("");
+      $("dvOzet").textContent = j.urun + " ürünün kalanı (" + miktarYaz(j.toplam) + " birim) " + h.slice(5) + " dönemine tek fişle aktarılacak.";
+      const ul = $("dvListe");
+      ul.innerHTML = "";
+      j.satirlar.forEach(x => {
+        const li = document.createElement("li");
+        li.innerHTML = '<div class="info"><b></b><span class="muted small"></span></div><strong></strong>';
+        li.querySelector("b").textContent = x.ad;
+        li.querySelector("span").textContent = x.kod || "";
+        li.querySelector("strong").textContent = miktarYaz(x.kalan) + " " + (x.birim || "");
+        ul.appendChild(li);
+      });
+      if (j.urun > j.satirlar.length) { const li = document.createElement("li"); li.textContent = "… ve " + (j.urun - j.satirlar.length) + " ürün daha"; ul.appendChild(li); }
+      $("dvPin").value = pinCache && Date.now() - pinAt < 10 * 60000 ? pinCache : "";
+      $("dvDevret").disabled = j.onceki > 0 || j.urun === 0;
+      if (j.onceki > 0) dvMsg("Bu dönemden devir daha önce yapılmış. İkinci kez yapılmaz.", "err");
+      else if (j.urun === 0) dvMsg("Kaynak dönemde kalanı olan ürün yok.", "err");
+      $("dvSonuc").hidden = false;
+    } catch (e) {
+      dvMsg("Önizleme yapılamadı: " + e.message, "err");
+    }
+  }
+
+  async function devirYap() {
+    if (!devirVeri) return;
+    const pin = String($("dvPin").value).trim();
+    if (!/^\d{4,8}$/.test(pin)) { dvMsg("PIN 4-8 rakam olmalı.", "err"); return; }
+    if (!confirm(devirVeri.urun + " ürünün kalanı " + devirVeri.kaynak.slice(5) + " döneminden " + devirVeri.hedef.slice(5) + " dönemine aktarılacak. Bu işlem bir kez yapılır. Devam edilsin mi?")) return;
+    $("dvDevret").disabled = true;
+    dvMsg("Devrediliyor, bu biraz sürebilir…");
+    try {
+      const res = await fetch("api/devir", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kaynak: devirVeri.kaynak, hedef: devirVeri.hedef, pin }) });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok && j.ok) {
+        pinCache = pin; pinAt = Date.now();
+        dvMsg("Devir tamam: fiş " + j.belge + ", " + j.adet + " ürün, toplam " + miktarYaz(j.toplam) + " birim.", "ok");
+        $("dvSonuc").hidden = true;
+        donemListesi = null;
+        return;
+      }
+      if (res.status === 401) { pinCache = ""; $("dvPin").value = ""; }
+      dvMsg(j.error || ("Devir yapılamadı (" + res.status + ")"), "err");
+    } catch (e) {
+      dvMsg("Kasa bilgisayarına ulaşılamadı. Devrin yapılıp yapılmadığını Önizle ile kontrol et.", "err");
+    }
+    $("dvDevret").disabled = false;
+  }
+
   const kodNorm = v => String(v || "").toLocaleUpperCase("tr-TR").replace(/[^0-9A-ZÇĞİÖŞÜ]/g, "").replace(/^([A-ZÇĞİÖŞÜ]*)0+(?=\d)/, "$1");
 
   function findByKod(q) {
@@ -2106,6 +2193,10 @@
     $("sScan").onclick = () => { scanMode = "stok"; sMsg(""); startScan(); window.scrollTo(0, 0); };
     $("sForm").onsubmit = e => { e.preventDefault(); stokAra($("sAra").value); };
     $("sTrzAra").oninput = stokTeraziListe;
+    $("devirBox").addEventListener("toggle", () => { if ($("devirBox").open) devirDonemler(); });
+    $("dvOnizle").onclick = devirOnizle;
+    $("dvDevret").onclick = devirYap;
+    ["dvKaynak", "dvHedef"].forEach(id => { $(id).onchange = () => { $("dvSonuc").hidden = true; devirVeri = null; dvMsg(""); }; });
     $("sdAdet").oninput = stokHesap;
     $("sdCarpan").oninput = stokHesap;
     $("sdEkle").onclick = stokEkle;

@@ -15,7 +15,7 @@ Bu dosya her oturumun başında okunur. Bu projede neyin neden böyle olduğunu 
 - Kullanıcı çoğu zaman telefondan yazıyor; dükkan açıkken kasa bilgisayarında iş yapmak zor, ağır işler gece.
 
 ## Mimari
-- `web/`: PWA (vanilla JS, derleme yok). `app.js` ana mantık, `scale.js` terazi barkodu çözümü, `etiket.js` + `etiket-duzen.js` raf etiketi çizimi, `icerik.js` içerik metni oluştur/çöz, `ocr.js` (Tesseract), `sw.js` (her değişiklikte `CACHE` sürümünü artır: şu an `fiyatgor-v45`; sunucu 5xx ya da ağ hatasında sayfa önbellekten açılır, /api/ istekleri önbelleğe alınmaz).
+- `web/`: PWA (vanilla JS, derleme yok). `app.js` ana mantık, `scale.js` terazi barkodu çözümü, `etiket.js` + `etiket-duzen.js` raf etiketi çizimi, `icerik.js` içerik metni oluştur/çöz, `ocr.js` (Tesseract), `sw.js` (her değişiklikte `CACHE` sürümünü artır: şu an `fiyatgor-v46`; sunucu 5xx ya da ağ hatasında sayfa önbellekten açılır, /api/ istekleri önbelleğe alınmaz).
 - `canli/sunucu.ps1`: Kasa bilgisayarında (Windows, `C:\FiyatGor`) zamanlanmış görev `FiyatGor` olarak çalışan PowerShell HttpListener HTTPS sunucusu, port 8443, kendinden imzalı sertifika. Açılışta GitHub `HEAD.zip`'ten kendini günceller; `sunucu.ps1` değiştiyse kendini yeni sürümle yeniden başlatır. `/api/guncelle` sadece web + ps1 kopyalar.
   - Yeniden başlatma komutu (yönetici PowerShell): `Stop-ScheduledTask FiyatGor; Start-ScheduledTask FiyatGor`
 - `canli/cl-yaz.ps1`, `cl-terazi-gonder.ps1`: 32-bit yardımcılar (Jet OLEDB 32-bit). Sunucu `SysWOW64\powershell.exe` ile çağırır; şifre `FG_CLPW` ortam değişkeni ile geçer (dosya: `C:\FiyatGor\clpw.txt`). CL mdb yolu `C:\FiyatGor\cl.txt` (Masaüstü `düzeltme.mdb`).
@@ -52,5 +52,6 @@ Bu dosya her oturumun başında okunur. Bu projede neyin neden böyle olduğunu 
 ## Durum
 - Bitenler ve bekleyenler: `docs/yapilacaklar.md` (her işten sonra güncelle).
 - Stok sekmesi (devir giriş fişi) dükkanda denendi: Çörek Otu Yağı'na 2 × 12 = 24 adet girildi (fiş A0000006), 4 tablo Vega'nın kayıtlarıyla birebir; sadece FIYATI 7-8. ondalık yuvarlaması düzeltildi (Vega keser). Vega'da kalan 54 olarak doğrulandı, iş bitti.
-- Sıradaki (kullanıcı 'yarın' dedi): devir düğmesi, sonra Yemeksepeti/Trendyol entegrasyonu, yapay zekâ içerik taslağı (Gemini + Open Food Facts; sadece taslak, anahtar kasada).
+- Dönem devri yazıldı (Stok sekmesi → Dönem devri, /api/devir): kaynak dönem kalanları (SUM ENVANTER > 0) hedef döneme tek fişle; işaret BASLIK.ALTBELGENO = 'DEVIR-<kaynak>' ile ikinci kez engellenir. Sadece önizleme denendi; gerçek devir yılbaşında.
+- Sıradaki: Yemeksepeti/Trendyol entegrasyonu, yapay zekâ içerik taslağı (Gemini + Open Food Facts; sadece taslak, anahtar kasada).
 - Commit geçmişindeki eski Claude satırları temizlendi ve kullanıcı onayıyla force push edildi.

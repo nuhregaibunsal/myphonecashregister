@@ -273,6 +273,22 @@
       <h2>Bu oturumda girilenler</h2>
       <ul class="list" id="sLog"></ul>
     </div>
+    <details class="card" id="devirBox">
+      <summary>Dönem devri (yılbaşı)</summary>
+      <p class="muted small">Önceki dönemde kalanı olan ürünleri yeni döneme tek bir devir giriş fişiyle aktarır. Her dönemden yalnızca bir kez yapılır. Yeni dönem Vega'da açılmadan yapma.</p>
+      <div class="grid">
+        <label>Kaynak dönem (eski)<select id="dvKaynak"></select></label>
+        <label>Hedef dönem (yeni)<select id="dvHedef"></select></label>
+      </div>
+      <button class="btn" id="dvOnizle" type="button">Önizle</button>
+      <p class="msg" id="dvMsg"></p>
+      <div id="dvSonuc" hidden>
+        <p class="sd-toplam" id="dvOzet"></p>
+        <ul class="list" id="dvListe"></ul>
+        <label class="sd-pin">PIN<input id="dvPin" type="password" inputmode="numeric" autocomplete="off"></label>
+        <button class="btn primary" id="dvDevret" type="button">Devret</button>
+      </div>
+    </details>
     <details class="card" id="sTeraziBox">
       <summary>Terazi ürünleri (barkodsuz kutular)</summary>
       <input id="sTrzAra" placeholder="Terazi ürünlerinde ara" autocomplete="off">
