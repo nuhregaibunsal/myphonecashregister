@@ -3,9 +3,7 @@
 ## Bekleyen
 ### Dükkanda denenecek (yazıldı)
 - [ ] Dönem devri (Stok → Dönem devri): kaynak dönemde SUM(DEPOENVANTER.ENVANTER) > 0 olan ürünler hedef döneme tek devir giriş fişiyle (ALTBELGENO = DEVIR-<kaynak>, ikinci kez engellenir). Şimdilik sadece Önizle denenecek; Devret yılbaşında, Vega yeni dönemi açtıktan ve izin.sql yeniden çalıştırıldıktan sonra.
-- [ ] Etiket yeni hali (kalın/büyük yazılar, Türkiye yazımında Yerli Üretim logosu) tekrar basılıp bakılacak.
 - [ ] Fiyat sorguda bulunamayan ürün için ＋ Ekle düğmesi.
-
 
 ### Yapılacak
 - [ ] Kullanıcı girişi ve roller: Cloudflare Access ile girenler **yönetici** (Cloudflare'in gönderdiği Cf-Access-Authenticated-User-Email başlığından anlaşılır). Ayrıca uygulamanın kendi **e-posta + şifre** girişi; bu şekilde girenler **normal kullanıcı**. Şifreler kasada tuzlanmış özet (hash) olarak saklanır, kullanıcıları yönetici ekler/siler. Normal kullanıcıların Cloudflare'e takılmadan girebilmesi için ayrı bir adres (ör. kullanici.tezgahpanel.com, Access'siz) ya da Access'te ayrı kural gerekecek. Rol atama: yönetici, Ayarlar'daki kullanıcı listesinden her kullanıcıya rol verir (ör. yönetici / personel / sadece bakar); her rolün hangi sekmeleri görüp neleri yapabileceği (fiyat değiştirme, ürün ekleme, stok girişi, etiket, içerik, devir) seçilebilir. Yetkiler sunucuda da denetlenir, sadece ekranda gizlemek yetmez. Varsayılan rollerin içeriği kullanıcıyla netleştirilecek.
@@ -18,6 +16,7 @@
 - [ ] CL'de aynı ürün kodlu ve fiyatı farklı ürünlerin temizliği (126 kod, 108'inde fiyat farklı; PLU 1000 ve 9994-9999 gibi kopyalar).
 
 ## Tamamlandı
+- [x] Etiketin kalın/büyük yazılı hali ve Türkiye yazımında Yerli Üretim logosu, dükkanda basıldı
 - [x] Stok girişi (📦 Stok sekmesi): adet × çarpan, devir giriş fişi; dükkanda denendi, Vega'da miktar doğru (30 + 24 = 54)
 - [x] Mobil uygulama: Cloudflare Tunnel + Access ile https://app.tezgahpanel.com, telefona uygulama olarak yüklendi (docs/cloudflare-kurulum.md). Kalan: C:\FiyatGor\alanadi.txt (bitiş uyarısı), diğer kullanıcıların e-postaları, kasa bilgisayarında da uygulama olarak yükleme.
 - [x] İçerik gönderimi telefondan paket terazilerine (W30), içerik 1, 3 ve 282 ile birebir doğrulandı

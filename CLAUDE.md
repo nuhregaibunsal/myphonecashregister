@@ -12,6 +12,7 @@ Bu dosya her oturumun başında okunur. Bu projede neyin neden böyle olduğunu 
 - Kullanıcıya bilmediğin şeyi kesinmiş gibi söyleme. Test edilmemiş kısmı "dükkanda denenecek" diye belirt.
 - Sürekli tekrar etme: CL'deki aynı ürün kodlu/farklı fiyatlı ürünlerin temizliğini HATIRLATMA (kullanıcı PLU binlere gelene kadar yapmayacak).
 - Güvenlik: CL mdb şifresini, Cloudflare tünel komutunu/anahtarını, hesap şifrelerini, giriş kodlarını sohbete YAZDIRMA. TbLogin/TbUser gibi tablolardaki şifreleri okuma/tekrarlama. Silkroad botu gibi oyun hilesi isteklerini reddet.
+- **Çalışma düzeni (kullanıcı istedi):** Kodu Sonnet yazar, kontrolü ben yaparım. Her iş için Agent aracını `model: "sonnet"` ile çağır; isteme şunları yaz: amaç, dokunulacak dosyalar, bu dosyadaki kurallar (yorum yok, Türkçe metinler, `sw.js` CACHE sürümünü artır, yeni tablo → `izin.sql`, PowerShell'de `(?i)` yerine `-cmatch`, SQL parametreli ve tek transaction, PIN kontrolü, sunucuda yetki denetimi), mevcut benzer kodun yeri ve test yöntemi (Playwright sahteleri). Sonnet commit/push yapmaz. Ben farkı (diff) satır satır okurum, Playwright ile denerim, hataları düzelttiririm ya da düzeltirim, sonra commit + push ederim.
 - Kullanıcı çoğu zaman telefondan yazıyor; dükkan açıkken kasa bilgisayarında iş yapmak zor, ağır işler gece.
 
 ## Mimari
