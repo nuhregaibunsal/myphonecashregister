@@ -452,6 +452,169 @@
     });
   }
 
+  let ogrAktif = null;
+  let ogrBasladi = false;
+
+  function ogrAdimlar() {
+    const nav = k => '.tabs button[data-tab="' + k + '"]';
+    const ad = me && me.ad ? me.ad : "";
+    let fiyatMetin = "";
+    if (can("fiyat")) fiyatMetin += "Ürün fiyatını değiştirebilirsin. Değişen fiyat kasaya ve terazilere gider. ";
+    else fiyatMetin += "Ürünlerin fiyatına buradan bakarsın. ";
+    if (can("etiket")) fiyatMetin += "Raf etiketi de basabilirsin.";
+    const tum = [
+      { baslik: ad ? "Hoş geldin " + ad : "Hoş geldin", metin: "Bu uygulamayla barkod okutup ürünün fiyatını görürsün. Aldığın ürünleri sepete ekleyip toplamı hesaplarsın. Şimdi kısaca gezelim." },
+      { hedef: "#startScan", baslik: "Barkod Okut", metin: "Buna basınca kamera açılır. Okuttuğun ürün sepete eklenir." },
+      { hedef: "#manualInput", baslik: "Elle yaz", metin: "Barkodu elle yazabilirsin. Ürünün adını yazıp da arayabilirsin. Terazi ürünleri listenin en üstünde çıkar." },
+      { hedef: ".totalbar", baslik: "Toplam tutar", metin: "Sepetin toplamı burada yazar. Temizle düğmesi sepeti boşaltır." },
+      { hedef: nav("sorgu"), baslik: "Fiyat Sorgu", metin: "Kamera açık kalır. Okuttuğun ürünün fiyatı büyük yazılır. Müşteriye göstermek için çok iyidir." },
+      { hedef: nav("urunler"), baslik: "Ürünler", metin: "Bütün ürünlerin listesi burada. Arayıp ürüne dokunursan sepete eklenir." },
+      { hedef: nav("fiyat"), baslik: "Fiyat", metin: fiyatMetin },
+      { hedef: nav("ekle"), baslik: "Ekle", metin: "Listede olmayan yeni bir ürünü buradan eklersin." },
+      { hedef: nav("stok"), baslik: "Stok", metin: "Dükkana gelen malın adedini buradan yazarsın. Stok kendiliğinden artar." },
+      { hedef: nav("icerik"), baslik: "İçerik", metin: "Terazi etiketlerinde çıkan içindekiler ve alerjen yazılarını buradan düzenlersin." },
+      { hedef: nav("ayarlar"), baslik: "Ayarlar", metin: "Şifreni buradan değiştirirsin. Çıkış da burada. Alt menüde hangi sekmelerin görüneceğini seçebilirsin. Bu öğreticiyi de buradan tekrar açarsın." },
+      { baslik: "Hazırsın", metin: "Bir şey yanlış giderse yöneticiye sor. İyi çalışmalar!" }
+    ];
+    return tum.filter(s => {
+      if (!s.hedef) return true;
+      const el = document.querySelector(s.hedef);
+      if (!el || el.hidden) return false;
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0;
+    });
+  }
+
+  function ogrBitir() {
+    const o = ogrAktif;
+    if (!o) return;
+    ogrAktif = null;
+    window.removeEventListener("resize", o.yerles);
+    window.removeEventListener("orientationchange", o.yerles);
+    window.removeEventListener("scroll", o.yerles, true);
+    document.removeEventListener("keydown", o.tus, true);
+    o.kat.remove();
+    window.scrollTo(0, o.scrollY);
+    if (me && me.eposta) store.set("ogretici:" + me.eposta, true);
+    if (o.onceki && o.onceki.focus) { try { o.onceki.focus(); } catch (e) { } }
+  }
+
+  function ogrBaslat() {
+    if (ogrAktif || !me || !me.giris) return;
+    const giris = $("giris");
+    if (giris && !giris.hidden) return;
+    switchTab("hesap");
+    const adimlar = ogrAdimlar();
+    if (!adimlar.length) return;
+
+    const kat = document.createElement("div");
+    kat.className = "ogr";
+    kat.innerHTML = '<div class="ogr-dim"></div><div class="ogr-spot"></div>' +
+      '<div class="ogr-kart" role="dialog" aria-modal="true" aria-labelledby="ogrBaslik">' +
+      '<div class="ogr-ust"><b id="ogrBaslik"></b><span class="muted small ogr-say"></span></div>' +
+      '<p class="ogr-metin" aria-live="polite"></p>' +
+      '<div class="ogr-alt"><button class="btn sm ogr-atla" type="button">Atla</button><span class="ogr-bos"></span>' +
+      '<button class="btn sm ogr-geri" type="button">Geri</button><button class="btn sm primary ogr-ileri" type="button">İleri</button></div></div>';
+    document.body.appendChild(kat);
+
+    const dim = kat.querySelector(".ogr-dim");
+    const spot = kat.querySelector(".ogr-spot");
+    const kart = kat.querySelector(".ogr-kart");
+    const bas = kat.querySelector("#ogrBaslik");
+    const say = kat.querySelector(".ogr-say");
+    const metin = kat.querySelector(".ogr-metin");
+    const atla = kat.querySelector(".ogr-atla");
+    const geri = kat.querySelector(".ogr-geri");
+    const ileri = kat.querySelector(".ogr-ileri");
+    let i = 0;
+
+    function yerles() {
+      const s = adimlar[i];
+      const vw = document.documentElement.clientWidth;
+      const vh = window.innerHeight;
+      const m = 12;
+      const gen = Math.min(340, vw - 2 * m);
+      kart.style.width = gen + "px";
+      const kh = kart.offsetHeight;
+      const el = s.hedef ? document.querySelector(s.hedef) : null;
+      const r = el ? el.getBoundingClientRect() : null;
+      if (!r || !r.width || !r.height) {
+        dim.hidden = false;
+        spot.hidden = true;
+        kart.style.left = Math.max(m, (vw - gen) / 2) + "px";
+        kart.style.top = Math.max(m, (vh - kh) / 2) + "px";
+        return;
+      }
+      dim.hidden = true;
+      spot.hidden = false;
+      const p = 6;
+      const x = Math.max(0, r.left - p), y = Math.max(0, r.top - p);
+      const w = Math.min(vw, r.right + p) - x, h = Math.min(vh, r.bottom + p) - y;
+      spot.style.left = x + "px";
+      spot.style.top = y + "px";
+      spot.style.width = w + "px";
+      spot.style.height = h + "px";
+      const alt = vh - (y + h) - m, ust = y - m;
+      let top;
+      if (alt >= kh + 8) top = y + h + 8;
+      else if (ust >= kh + 8) top = y - kh - 8;
+      else top = alt >= ust ? vh - kh - m : m;
+      top = Math.min(Math.max(m, top), Math.max(m, vh - kh - m));
+      let left = r.left + r.width / 2 - gen / 2;
+      left = Math.min(Math.max(m, left), vw - gen - m);
+      kart.style.left = left + "px";
+      kart.style.top = top + "px";
+    }
+
+    function goster() {
+      const s = adimlar[i];
+      bas.textContent = s.baslik;
+      metin.textContent = s.metin;
+      say.textContent = (i + 1) + " / " + adimlar.length;
+      geri.hidden = i === 0;
+      ileri.textContent = i === adimlar.length - 1 ? "Bitir" : "İleri";
+      const el = s.hedef ? document.querySelector(s.hedef) : null;
+      if (el) el.scrollIntoView({ block: "center" });
+      yerles();
+      requestAnimationFrame(yerles);
+      setTimeout(yerles, 250);
+      ileri.focus();
+    }
+
+    function tus(e) {
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); ogrBitir(); return; }
+      if (e.key === "Tab") {
+        const d = [atla, geri, ileri].filter(b => !b.hidden);
+        const k = d.indexOf(document.activeElement);
+        e.preventDefault();
+        d[(k + (e.shiftKey ? d.length - 1 : 1)) % d.length].focus();
+      }
+    }
+
+    atla.onclick = () => ogrBitir();
+    geri.onclick = () => { if (i > 0) { i--; goster(); } };
+    ileri.onclick = () => { if (i >= adimlar.length - 1) ogrBitir(); else { i++; goster(); } };
+
+    ogrAktif = { kat, yerles, tus, scrollY: window.scrollY, onceki: document.activeElement };
+    window.addEventListener("resize", yerles);
+    window.addEventListener("orientationchange", yerles);
+    window.addEventListener("scroll", yerles, true);
+    document.addEventListener("keydown", tus, true);
+    goster();
+  }
+
+  function ogrOtomatik() {
+    if (ogrBasladi || !me || !me.giris || me.rol !== "kullanici") return;
+    if (store.get("ogretici:" + me.eposta, false)) return;
+    ogrBasladi = true;
+    setTimeout(() => {
+      if (ogrAktif || !me || !me.giris) return;
+      const giris = $("giris");
+      if (giris && !giris.hidden) { ogrBasladi = false; return; }
+      ogrBaslat();
+    }, 600);
+  }
+
   function updatePriceTab() {
     menuUygula();
     menuAyarKur();
@@ -460,6 +623,7 @@
     $("devirBox").hidden = !can("devir");
     hesapCiz();
     if (can("ekle")) loadLists();
+    ogrOtomatik();
   }
 
   async function appGuncelle() {
@@ -2449,6 +2613,7 @@
     $("sdEkle").onclick = stokEkle;
     $("girisForm").onsubmit = girisGonder;
     $("cikisBtn").onclick = cikisYap;
+    $("ogreticiBtn").onclick = ogrBaslat;
     $("sifreAc").onclick = () => { $("sifreForm").hidden = !$("sifreForm").hidden; sfMsg(""); };
     $("sfVazgec").onclick = () => { $("sifreForm").reset(); $("sifreForm").hidden = true; sfMsg(""); };
     $("sifreForm").onsubmit = sifreDegistir;

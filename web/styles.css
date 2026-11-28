@@ -260,3 +260,14 @@ summary { cursor: pointer; color: var(--muted); padding: 6px 0; }
 #kulDuzenle input:not([type=checkbox]) { font-size: 16px; text-align: left; margin: 0; }
 #kulDuzenle form { display: flex; flex-direction: column; gap: 8px; }
 #kulEkleBox summary { font-weight: 650; padding: 6px 0; }
+.ogr { position: fixed; inset: 0; z-index: 200; overflow: hidden; }
+.ogr-dim { position: absolute; inset: 0; background: rgba(0,0,0,.6); }
+.ogr-spot { position: absolute; border-radius: var(--radius); box-shadow: 0 0 0 9999px rgba(0,0,0,.6); outline: 3px solid var(--label); pointer-events: none; transition: left .2s, top .2s, width .2s, height .2s; }
+.ogr-kart { position: absolute; max-width: calc(100vw - 24px); background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; box-shadow: 0 10px 30px rgba(0,0,0,.35); display: flex; flex-direction: column; gap: 8px; }
+.ogr-ust { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.ogr-ust b { font-size: 18px; overflow-wrap: anywhere; }
+.ogr-say { white-space: nowrap; }
+.ogr-metin { margin: 0; font-size: 15px; line-height: 1.45; }
+.ogr-alt { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.ogr-bos { flex: 1; }
+@media (prefers-reduced-motion: reduce) { .ogr-spot { transition: none; } }
