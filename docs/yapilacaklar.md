@@ -9,7 +9,6 @@
 ### Yapılacak
 - [x] Kullanıcı girişi ve roller (ilk yönetici kuruldu, giriş çalışıyor): kayıt ol yok, hesapları yönetici açar. PIN kaldırıldı. Roller: Yönetici (her şey) ve Kullanıcı (işaretlenen izinler: fiyat değiştirme, ürün ekleme/düzenleme, stok girişi, etiket, içerik, dönem devri). Yetkiler sunucuda denetlenir. Hesap açma, düzenleme, pasif yapma, şifre sıfırlama, silme; herkes kendi şifresini değiştirebilir.
 - [ ] Öğretici: normal kullanıcılar için ilk açılışta adım adım tanıtım (sekmeler, barkod okutma, sorgu…), Ayarlar'dan tekrar açılabilir.
-- [ ] Aramalarda terazi ürünleri (TRZ-) en üstte: ör. "nane" aranınca önce TRZ'li Nane, sonra nane yağı vb. Ürünler, Hesap, Fiyat, Stok ve Ekle aramalarında aynı sıralama; TRZ'ler içinde adı aranan kelimeyle başlayanlar önce.
 - [ ] Yapay zekâ ile içerik taslağı: İçerik ekranında "Taslak oluştur". Besin değerleri önce gerçek veri setlerinden: genel ürünler (fındık, leblebi, çekirdek…) için TürKomp (Ulusal Gıda Kompozisyon Veri Tabanı) ve USDA FoodData Central (ücretsiz API, kamu malı); barkodlu markalı ürünler için Open Food Facts. Gemini sadece ürün adını doğru veri seti kaydıyla eşleştirir (ör. "çifte kavrulmuş fındık" → kavrulmuş fındık), içindekiler/alerjen taslağı yazar ve karışımlarda oranlı hesap önerir. Her şey taslak: kullanıcı kontrol edip Kaydet'e basmadan CL'ye/teraziye gitmez; kaynak ekranda yazar. API anahtarları kasada C:\FiyatGor içinde, istekler sunucu üzerinden.
 - [ ] Yemeksepeti ve Trendyol entegrasyonu: siparişleri/ürün-fiyat-stok eşitlemesini kasa sunucusu üzerinden yapmak (Trendyol'un açık satıcı API'si var; Yemeksepeti iş ortağı onayı gerektirir). Ekranlar aynı uygulamaya eklenecek, ayrı masaüstü programı gerekmez.
 
@@ -17,6 +16,7 @@
 - [ ] CL'de aynı ürün kodlu ve fiyatı farklı ürünlerin temizliği (126 kod, 108'inde fiyat farklı; PLU 1000 ve 9994-9999 gibi kopyalar).
 
 ## Tamamlandı
+- [x] Aramalarda terazi ürünleri (TRZ-) en üstte: tam barkod/PLU/kod eşleşmesi önce, sonra adı aranan kelimeyle başlayan TRZ'ler, diğer TRZ'ler, sonra diğer ürünler
 - [x] Cloudflare Access kaldırıldı; giriş uygulamanın kendi e-posta + şifresiyle
 - [x] Etiketin kalın/büyük yazılı hali ve Türkiye yazımında Yerli Üretim logosu, dükkanda basıldı
 - [x] Stok girişi (📦 Stok sekmesi): adet × çarpan, devir giriş fişi; dükkanda denendi, Vega'da miktar doğru (30 + 24 = 54)

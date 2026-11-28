@@ -2177,12 +2177,28 @@
     q = lower(q).trim();
     if (!q) return products.slice(0, limit);
     const words = q.split(/\s+/);
-    const out = [];
-    for (const p of products) {
+    const first = words[0];
+    const rank = p => {
+      const kod = lower(p.kod || "");
+      if (q === String(p.barkod) || (p.plu && q === String(p.plu)) || q === kod) return 0;
+      const ad = lower(p.ad);
+      const trz = kod.startsWith("trz-");
+      const starts = ad.startsWith(q);
+      if (trz && starts) return 1;
+      const wordStart = ad.split(/[\s.,;:()\-\/]+/).some(w => w.startsWith(first));
+      if (trz && wordStart) return 2;
+      if (trz) return 3;
+      if (starts) return 4;
+      if (wordStart) return 5;
+      return 6;
+    };
+    const found = [];
+    products.forEach((p, i) => {
       const hay = lower(p.ad) + " " + p.barkod + " " + p.plu + " " + lower(p.kod || "");
-      if (words.every(w => hay.includes(w))) { out.push(p); if (out.length >= limit) break; }
-    }
-    return out;
+      if (words.every(w => hay.includes(w))) found.push({ p, i, r: rank(p) });
+    });
+    found.sort((a, b) => a.r - b.r || a.i - b.i);
+    return found.slice(0, limit).map(x => x.p);
   }
 
   const noop = () => { };
