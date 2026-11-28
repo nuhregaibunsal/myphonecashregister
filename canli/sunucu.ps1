@@ -334,6 +334,16 @@ function Ben-Nesne($ctx) {
     return (Ben-Nesne2 $u $kur)
 }
 
+function Get-IstemciIp($ctx) {
+    $ep = $ctx.Request.RemoteEndPoint.Address
+    if ([System.Net.IPAddress]::IsLoopback($ep)) {
+        $cf = [string]$ctx.Request.Headers["CF-Connecting-IP"]
+        $a = $null
+        if ($cf -and [System.Net.IPAddress]::TryParse($cf.Trim(), [ref]$a)) { return $a.ToString() }
+    }
+    return [string]$ep
+}
+
 function Giris-Kilitli([string]$eposta, [string]$ip) {
     $now = Get-Date
     foreach ($k in @("e:" + $eposta, "i:" + $ip)) {
@@ -352,7 +362,8 @@ function Giris-Hata([string]$eposta, [string]$ip) {
         $liste = New-Object System.Collections.ArrayList
         if ($script:fails.ContainsKey($k)) { foreach ($t in $script:fails[$k]) { if ($t -gt $now.AddMinutes(-10)) { [void]$liste.Add($t) } } }
         [void]$liste.Add($now)
-        if ($liste.Count -ge 5) {
+        $sinir = if ($k.StartsWith("i:")) { 20 } else { 5 }
+        if ($liste.Count -ge $sinir) {
             $script:locks[$k] = $now.AddMinutes(5)
             $script:fails.Remove($k)
             Log "Giris 5 kez yanlis, 5 dakika kilitlendi: $k"
@@ -376,7 +387,7 @@ function Invoke-Giris($ctx) {
     $b = Read-JsonBody $ctx
     $eposta = ([string](Get-F $b "eposta")).Trim().ToLowerInvariant()
     $sifre = [string](Get-F $b "sifre")
-    $ip = [string]$ctx.Request.RemoteEndPoint.Address
+    $ip = (Get-IstemciIp $ctx)
     if (Test-Giris-Kilit $ctx $eposta $ip) { return }
     $u = Find-User $eposta
     $ok = Test-Sifre $u $sifre
@@ -408,7 +419,7 @@ function Invoke-Cikis($ctx) {
 
 function Invoke-Kurulum($ctx) {
     $b = Read-JsonBody $ctx
-    $ip = [string]$ctx.Request.RemoteEndPoint.Address
+    $ip = (Get-IstemciIp $ctx)
     if ((Count-ActiveAdmins "") -gt 0) { SendJson $ctx 403 @{ ok = $false; error = "Kurulum zaten yapilmis." }; return }
     if (-not (Test-Path $pinFile)) { SendJson $ctx 403 @{ ok = $false; error = "Kurulum icin PIN dosyasi yok." }; return }
     if (Test-Giris-Kilit $ctx "" $ip) { return }
@@ -453,7 +464,7 @@ function Invoke-Kullanicilar($ctx) {
     $b = Read-JsonBody $ctx
     $islem = [string](Get-F $b "islem")
     $eposta = ([string](Get-F $b "eposta")).Trim().ToLowerInvariant()
-    $ip = [string]$ctx.Request.RemoteEndPoint.Address
+    $ip = (Get-IstemciIp $ctx)
     if ($islem -eq "ekle") {
         $ad = ([string](Get-F $b "ad")).Trim()
         $sifre = [string](Get-F $b "sifre")
@@ -517,7 +528,7 @@ function Invoke-Sifrem($ctx) {
     $me = Yetki-Gerek $ctx ""
     if (-not $me) { return }
     $b = Read-JsonBody $ctx
-    $ip = [string]$ctx.Request.RemoteEndPoint.Address
+    $ip = (Get-IstemciIp $ctx)
     $yeni = [string](Get-F $b "yeni")
     if (Test-Giris-Kilit $ctx $me.eposta $ip) { return }
     $u = Find-User $me.eposta
@@ -744,7 +755,7 @@ function Set-Ozel($ctx) {
         $n = [int]$cmd.ExecuteScalar()
     } finally { $conn.Close() }
     if ($n -ne 1) { SendJson $ctx 404 @{ ok = $false; error = "Urun bulunamadi." }; return }
-    $ip = $u.eposta + " " + [string]$ctx.Request.RemoteEndPoint.Address
+    $ip = $u.eposta + " " + (Get-IstemciIp $ctx)
     $ozet = ($keys | ForEach-Object { "KOD$_=" + $vals[$_] }) -join " "
     Add-Content -Path $changeLog -Value ("{0:yyyy-MM-dd HH:mm:ss};OZELKOD;{1};{2};{3}" -f (Get-Date), $stok, $ozet.Replace(";", " "), $ip) -Encoding UTF8
     Log "Ozel kod degisti: stok $stok, $ozet ($ip)"
@@ -855,7 +866,7 @@ function Set-Icerik($ctx) {
     $res = (Invoke-CLHelper @("-IcerikYaz", "-Item", "$kod", "-TextB64", $b64) | Where-Object { $_ } | Select-Object -Last 1)
     $script:icerikCache = $null
     if (-not ($res -like "OK icerik-*")) { Log "Icerik yazilamadi: $kod -> $res"; SendJson $ctx 500 @{ ok = $false; error = "CL'ye yazilamadi: $res" }; return }
-    $ip = $u.eposta + " " + [string]$ctx.Request.RemoteEndPoint.Address
+    $ip = $u.eposta + " " + (Get-IstemciIp $ctx)
     Add-Content -Path $changeLog -Value ("{0:yyyy-MM-dd HH:mm:ss};ICERIK;{1};{2};{3}" -f (Get-Date), $kod, ($res -split " ")[1], $ip) -Encoding UTF8
     Log "Icerik kaydedildi: $kod ($res, $ip)"
     $teraziMesaj = ""
@@ -935,7 +946,7 @@ SELECT @yeni AS sonuc, N'' AS neden, N'' AS ad;
         return
     }
     $script:cache = $null
-    $ip = $u.eposta + " " + [string]$ctx.Request.RemoteEndPoint.Address
+    $ip = $u.eposta + " " + (Get-IstemciIp $ctx)
     Add-Content -Path $changeLog -Value ("{0:yyyy-MM-dd HH:mm:ss};BIRIM;{1};{2};{3};{4};{5};{6}" -f (Get-Date), $stok, $birim, $agirlik, $barkod, $fiyat, $ip) -Encoding UTF8
     Log "Birim eklendi: stok $stok, $birim $agirlik kg, $barkod, $fiyat ($ip)"
     SendJson $ctx 200 @{ ok = $true; ind = [int]$sonuc }
@@ -1062,7 +1073,7 @@ SELECT @bas AS sonuc, @belge AS belge, @kalan AS kalan;
         $r.Close()
     } finally { $conn.Close() }
     if ($sonuc -le 0) { SendJson $ctx 404 @{ ok = $false; error = "Urun bulunamadi." }; return }
-    $ip = $u.eposta + " " + [string]$ctx.Request.RemoteEndPoint.Address
+    $ip = $u.eposta + " " + (Get-IstemciIp $ctx)
     Add-Content -Path $changeLog -Value ("{0:yyyy-MM-dd HH:mm:ss};STOKGIRIS;{1};{2};{3};{4}" -f (Get-Date), $stok, $miktar, $belge, $ip) -Encoding UTF8
     Log "Stok girisi: stok $stok, +$miktar, $belge ($P, $ip)"
     SendJson $ctx 200 @{ ok = $true; belge = $belge; kalan = [double]$kalan; miktar = [double]$miktar }
@@ -1212,7 +1223,7 @@ SELECT @bas AS sonuc, @belge AS belge, @adet AS adet, @toplam AS toplam;
     if ($sonuc -eq -2) { SendJson $ctx 409 @{ ok = $false; error = "Bu donemden devir daha once yapilmis. Ikinci kez yapilmaz." }; return }
     if ($sonuc -eq -3) { SendJson $ctx 400 @{ ok = $false; error = "Kaynak donemde kalani olan urun yok." }; return }
     if ($sonuc -le 0) { SendJson $ctx 500 @{ ok = $false; error = "Devir yapilamadi." }; return }
-    $ip = $u.eposta + " " + [string]$ctx.Request.RemoteEndPoint.Address
+    $ip = $u.eposta + " " + (Get-IstemciIp $ctx)
     Add-Content -Path $changeLog -Value ("{0:yyyy-MM-dd HH:mm:ss};DEVIR;{1};{2};{3};{4};{5}" -f (Get-Date), $K, $H, $belge, $adet, $ip) -Encoding UTF8
     Log "Devir: $K -> $H, $adet urun, $belge ($ip)"
     SendJson $ctx 200 @{ ok = $true; belge = $belge; adet = $adet; toplam = $toplam }
@@ -1336,7 +1347,7 @@ function Set-Price($ctx) {
         $conn.Close()
     }
     $script:cache = $null
-    $ip = $u.eposta + " " + [string]$ctx.Request.RemoteEndPoint.Address
+    $ip = $u.eposta + " " + (Get-IstemciIp $ctx)
     $line = "{0:yyyy-MM-dd HH:mm:ss};FIYAT;{1};{2};{3};{4}" -f (Get-Date), $stok, ([string]$b["ad"]).Replace(";", " "), ($done -join " "), $ip
     Add-Content -Path $changeLog -Value $line -Encoding UTF8
     Log "Fiyat degisti: stok $stok, $($done -join ' ') ($ip)"
@@ -1549,7 +1560,7 @@ SELECT @s AS sonuc, N'' AS neden, CAST(@bi AS nvarchar(20)) AS ad;
         return
     }
     $script:cache = $null
-    $ip = $u.eposta + " " + [string]$ctx.Request.RemoteEndPoint.Address
+    $ip = $u.eposta + " " + (Get-IstemciIp $ctx)
     $line = "{0:yyyy-MM-dd HH:mm:ss};EKLE;{1};{2};{3};{4};{5}" -f (Get-Date), $sonuc, $kod, $ad.Replace(";", " "), $f1, $ip
     Add-Content -Path $changeLog -Value $line -Encoding UTF8
     Log "Urun eklendi: $kod $ad ($ip)"
@@ -1595,6 +1606,7 @@ function SendJson($ctx, [int]$status, $obj) {
 function Handle($ctx) {
     $path = [System.Uri]::UnescapeDataString($ctx.Request.Url.AbsolutePath)
     if ($path -eq "/api/urunler") {
+        if (-not (Get-Oturum $ctx)) { SendJson $ctx 401 @{ ok = $false; giris = $true; error = "Giris yapin." }; return }
         try {
             Send $ctx 200 "application/json; charset=utf-8" (Get-ProductsJson) $true
         } catch {

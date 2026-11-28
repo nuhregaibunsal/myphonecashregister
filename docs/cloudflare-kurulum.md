@@ -29,7 +29,10 @@ Cloudflare'in ekran adları zamanla değişebilir. Bir adım tutmazsa ekran gör
    - URL: `localhost:8443`
    - Additional application settings → TLS → **No TLS Verify: açık** (sunucu kendi imzalı sertifika kullandığı için)
 
-## D. Giriş koruması (Access)
+## Not: Access artık gerekmiyor
+Uygulamanın kendi e-posta + şifre girişi var. Önce uygulamada ilk yönetici hesabını açın, sonra Zero Trust → **Access → Applications** listesindeki `app.tezgahpanel.com` uygulamasını ve `Tezgah yukleme` uygulamasını silin (… → Delete). Tünel kalır. Aşağıdaki D ve D2 bölümleri sadece eski kurulum içindir.
+
+## D. Giriş koruması (Access, eski)
 9. Zero Trust → **Access → Applications → Add an application → Self-hosted**.
    - Application domain: `app.tezgahpanel.com`
    - Session Duration: **1 month** (ayda bir kod ister)
