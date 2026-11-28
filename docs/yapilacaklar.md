@@ -6,7 +6,8 @@
 - [ ] Fiyat sorguda bulunamayan ürün için ＋ Ekle düğmesi.
 
 ### Yapılacak
-- [ ] Kullanıcı girişi ve roller: Cloudflare Access ile girenler **yönetici** (Cloudflare'in gönderdiği Cf-Access-Authenticated-User-Email başlığından anlaşılır). Ayrıca uygulamanın kendi **e-posta + şifre** girişi; bu şekilde girenler **normal kullanıcı**. Şifreler kasada tuzlanmış özet (hash) olarak saklanır, kullanıcıları yönetici ekler/siler. Normal kullanıcıların Cloudflare'e takılmadan girebilmesi için ayrı bir adres (ör. kullanici.tezgahpanel.com, Access'siz) ya da Access'te ayrı kural gerekecek. Rol atama: yönetici, Ayarlar'daki kullanıcı listesinden her kullanıcıya rol verir (ör. yönetici / personel / sadece bakar); her rolün hangi sekmeleri görüp neleri yapabileceği (fiyat değiştirme, ürün ekleme, stok girişi, etiket, içerik, devir) seçilebilir. Yetkiler sunucuda da denetlenir, sadece ekranda gizlemek yetmez. Varsayılan rollerin içeriği kullanıcıyla netleştirilecek.
+- [x] Kullanıcı girişi ve roller (dükkanda denenecek): kayıt ol yok, hesapları yönetici açar. PIN kaldırıldı. Roller: Yönetici (her şey) ve Kullanıcı (işaretlenen izinler: fiyat değiştirme, ürün ekleme/düzenleme, stok girişi, etiket, içerik, dönem devri). Yetkiler sunucuda denetlenir. Hesap açma, düzenleme, pasif yapma, şifre sıfırlama, silme; herkes kendi şifresini değiştirebilir.
+- [ ] Normal kullanıcılar için Cloudflare Access'siz ayrı adres (ör. kullanici.tezgahpanel.com) ya da Access'te ayrı kural.
 - [ ] Öğretici: normal kullanıcılar için ilk açılışta adım adım tanıtım (sekmeler, barkod okutma, sorgu…), Ayarlar'dan tekrar açılabilir.
 - [ ] Aramalarda terazi ürünleri (TRZ-) en üstte: ör. "nane" aranınca önce TRZ'li Nane, sonra nane yağı vb. Ürünler, Hesap, Fiyat, Stok ve Ekle aramalarında aynı sıralama; TRZ'ler içinde adı aranan kelimeyle başlayanlar önce.
 - [ ] Yapay zekâ ile içerik taslağı: İçerik ekranında "Taslak oluştur". Besin değerleri önce gerçek veri setlerinden: genel ürünler (fındık, leblebi, çekirdek…) için TürKomp (Ulusal Gıda Kompozisyon Veri Tabanı) ve USDA FoodData Central (ücretsiz API, kamu malı); barkodlu markalı ürünler için Open Food Facts. Gemini sadece ürün adını doğru veri seti kaydıyla eşleştirir (ör. "çifte kavrulmuş fındık" → kavrulmuş fındık), içindekiler/alerjen taslağı yazar ve karışımlarda oranlı hesap önerir. Her şey taslak: kullanıcı kontrol edip Kaydet'e basmadan CL'ye/teraziye gitmez; kaynak ekranda yazar. API anahtarları kasada C:\FiyatGor içinde, istekler sunucu üzerinden.
@@ -29,7 +30,7 @@
 - [x] İçerik gönderim protokolü (W30) çözüldü
 - [x] Telefondan fiyat sorgulama, barkod/terazi etiketi okuma, sepet
 - [x] Kasa veritabanından (Vega/UNSALDB) canlı bağlantı
-- [x] Telefondan fiyat değiştirme (PIN korumalı, çok birimli ürünlerde tüm birimler)
+- [x] Telefondan fiyat değiştirme (yetkili kullanıcı, çok birimli ürünlerde tüm birimler)
 - [x] Telefondan ürün ekleme (Vega'ya)
 - [x] Tailscale ile dükkan dışından erişim
 - [x] CL Works terazi protokolü çözüldü (6 yakalama ile doğrulandı)

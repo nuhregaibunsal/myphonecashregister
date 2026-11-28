@@ -118,8 +118,13 @@ function Get-ProductsJson {
 
 $pinFile = Join-Path $root "pin.txt"
 $changeLog = Join-Path $root "fiyat-degisiklikleri.csv"
-$script:pinFails = 0
-$script:lockUntil = [datetime]::MinValue
+$usersFile = Join-Path $root "kullanicilar.json"
+$sessFile = Join-Path $root "oturumlar.json"
+$allPerms = @("fiyat", "ekle", "stok", "etiket", "icerik", "devir")
+$script:users = New-Object System.Collections.ArrayList
+$script:sessions = @{}
+$script:fails = @{}
+$script:locks = @{}
 
 function Hash-Pin([string]$salt, [string]$pin) {
     $sha = [System.Security.Cryptography.SHA256]::Create()
@@ -127,23 +132,410 @@ function Hash-Pin([string]$salt, [string]$pin) {
     return ([System.BitConverter]::ToString($bytes)).Replace("-", "")
 }
 
-function Test-Pin([string]$pin) {
-    if (-not (Test-Path $pinFile)) { return "kapali" }
-    if ((Get-Date) -lt $script:lockUntil) { return "kilitli" }
+function Test-EskiPin([string]$pin) {
+    if (-not (Test-Path $pinFile)) { return $false }
     $parts = ([System.IO.File]::ReadAllText($pinFile)).Trim().Split(":")
-    if ($parts.Length -eq 2 -and (Hash-Pin $parts[0] $pin) -eq $parts[1]) {
-        $script:pinFails = 0
-        return "ok"
-    }
-    $script:pinFails++
-    if ($script:pinFails -ge 5) {
-        $script:lockUntil = (Get-Date).AddMinutes(5)
-        $script:pinFails = 0
-        Log "PIN 5 kez yanlis girildi, 5 dakika kilitlendi"
-        return "kilitli"
-    }
-    return "yanlis"
+    if ($parts.Length -ne 2) { return $false }
+    return (Esit-Mi (Hash-Pin $parts[0] $pin) $parts[1])
 }
+
+function Esit-Mi([string]$x, [string]$y) {
+    $a = [System.Text.Encoding]::UTF8.GetBytes($x)
+    $c = [System.Text.Encoding]::UTF8.GetBytes($y)
+    $d = $a.Length -bxor $c.Length
+    $n = [math]::Min($a.Length, $c.Length)
+    for ($i = 0; $i -lt $n; $i++) { $d = $d -bor ($a[$i] -bxor $c[$i]) }
+    return ($d -eq 0)
+}
+
+function Get-F($b, [string]$k) {
+    if ($b -and $b.ContainsKey($k)) { return $b[$k] }
+    return $null
+}
+
+function Write-AtomicText([string]$path, [string]$text) {
+    $tmp = $path + ".tmp"
+    [System.IO.File]::WriteAllText($tmp, $text, (New-Object System.Text.UTF8Encoding($false)))
+    Move-Item -LiteralPath $tmp -Destination $path -Force
+}
+
+function Clean-Perms($arr) {
+    $out = New-Object System.Collections.ArrayList
+    foreach ($y in @($arr)) {
+        $s = ([string]$y).Trim().ToLowerInvariant()
+        if ($s -and ($allPerms -contains $s) -and -not ($out -contains $s)) { [void]$out.Add($s) }
+    }
+    return ,([string[]]$out.ToArray())
+}
+
+function Load-Users {
+    $script:users = New-Object System.Collections.ArrayList
+    if (-not (Test-Path $usersFile)) { return }
+    $raw = [System.IO.File]::ReadAllText($usersFile, [System.Text.Encoding]::UTF8)
+    if (-not $raw.Trim()) { return }
+    foreach ($o in @($ser.DeserializeObject($raw))) {
+        $yet = Clean-Perms (Get-F $o "yetkiler")
+        [void]$script:users.Add(@{
+            eposta = ([string](Get-F $o "eposta")).Trim().ToLowerInvariant()
+            ad = [string](Get-F $o "ad")
+            tuz = [string](Get-F $o "tuz")
+            ozet = [string](Get-F $o "ozet")
+            tur = [int](Get-F $o "tur")
+            rol = $(if ([string](Get-F $o "rol") -eq "yonetici") { "yonetici" } else { "kullanici" })
+            yetkiler = $yet
+            aktif = [bool](Get-F $o "aktif")
+            olusturma = [string](Get-F $o "olusturma")
+        })
+    }
+}
+
+function Save-Users {
+    Write-AtomicText $usersFile ($ser.Serialize(@($script:users.ToArray())))
+}
+
+function Find-User([string]$eposta) {
+    $e = $eposta.Trim().ToLowerInvariant()
+    foreach ($u in $script:users) { if ($u.eposta -eq $e) { return $u } }
+    return $null
+}
+
+function Count-ActiveAdmins([string]$haric) {
+    $n = 0
+    foreach ($u in $script:users) { if ($u.rol -eq "yonetici" -and $u.aktif -and $u.eposta -ne $haric) { $n++ } }
+    return $n
+}
+
+function Hash-Sifre([string]$sifre, [byte[]]$tuz, [int]$tur) {
+    $k = [System.Security.Cryptography.Rfc2898DeriveBytes]::new($sifre, $tuz, $tur, [System.Security.Cryptography.HashAlgorithmName]::SHA256)
+    try { return [System.Convert]::ToBase64String($k.GetBytes(32)) } finally { $k.Dispose() }
+}
+
+function Set-Sifre($u, [string]$sifre) {
+    $rng = New-Object System.Security.Cryptography.RNGCryptoServiceProvider
+    $tuz = New-Object byte[] 16
+    $rng.GetBytes($tuz)
+    $rng.Dispose()
+    $u.tuz = [System.Convert]::ToBase64String($tuz)
+    $u.tur = 120000
+    $u.ozet = Hash-Sifre $sifre $tuz 120000
+}
+
+function Test-Sifre($u, [string]$sifre) {
+    if (-not $u) {
+        $d = Hash-Sifre $sifre ([byte[]](1..16)) 120000
+        return $false
+    }
+    $h = Hash-Sifre $sifre ([System.Convert]::FromBase64String($u.tuz)) $u.tur
+    return (Esit-Mi $h $u.ozet)
+}
+
+function Token-Ozet([string]$t) {
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    $bytes = $sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($t))
+    return ([System.BitConverter]::ToString($bytes)).Replace("-", "").ToLowerInvariant()
+}
+
+function Load-Sessions {
+    $script:sessions = @{}
+    if (-not (Test-Path $sessFile)) { return }
+    $raw = [System.IO.File]::ReadAllText($sessFile, [System.Text.Encoding]::UTF8)
+    if (-not $raw.Trim()) { return }
+    $o = $ser.DeserializeObject($raw)
+    $now = (Get-Date).ToUniversalTime()
+    foreach ($k in @($o.Keys)) {
+        $bitis = [datetime]::Parse([string]$o[$k]["bitis"], [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::RoundtripKind).ToUniversalTime()
+        if ($bitis -gt $now) { $script:sessions[[string]$k] = @{ eposta = [string]$o[$k]["eposta"]; bitis = $bitis } }
+    }
+}
+
+function Save-Sessions {
+    $now = (Get-Date).ToUniversalTime()
+    $out = @{}
+    foreach ($k in @($script:sessions.Keys)) {
+        $s = $script:sessions[$k]
+        if ($s.bitis -le $now) { $script:sessions.Remove($k) }
+        else { $out[$k] = @{ eposta = $s.eposta; bitis = $s.bitis.ToString("o") } }
+    }
+    Write-AtomicText $sessFile ($ser.Serialize($out))
+}
+
+function Remove-Sessions([string]$eposta, [string]$kalan) {
+    foreach ($k in @($script:sessions.Keys)) {
+        if ($script:sessions[$k].eposta -eq $eposta -and $k -ne $kalan) { $script:sessions.Remove($k) }
+    }
+    Save-Sessions
+}
+
+function Get-Cookie($ctx) {
+    $c = $ctx.Request.Cookies["fg_oturum"]
+    if ($c) { return [string]$c.Value }
+    $h = [string]$ctx.Request.Headers["Cookie"]
+    foreach ($p in $h.Split(";")) {
+        $kv = $p.Trim()
+        if ($kv.StartsWith("fg_oturum=")) { return $kv.Substring(10) }
+    }
+    return ""
+}
+
+function New-Session($ctx, [string]$eposta) {
+    $rng = New-Object System.Security.Cryptography.RNGCryptoServiceProvider
+    $bytes = New-Object byte[] 32
+    $rng.GetBytes($bytes)
+    $rng.Dispose()
+    $t = [System.Convert]::ToBase64String($bytes).TrimEnd("=").Replace("+", "-").Replace("/", "_")
+    $oz = Token-Ozet $t
+    $script:sessions[$oz] = @{ eposta = $eposta; bitis = (Get-Date).ToUniversalTime().AddDays(30) }
+    Save-Sessions
+    $ctx.Response.AppendHeader("Set-Cookie", "fg_oturum=$t; Path=/; Max-Age=2592000; HttpOnly; Secure; SameSite=Lax")
+    return $oz
+}
+
+function Get-Oturum($ctx) {
+    $t = Get-Cookie $ctx
+    if (-not $t) { return $null }
+    $oz = Token-Ozet $t
+    $s = $script:sessions[$oz]
+    if (-not $s) { return $null }
+    if ($s.bitis -le (Get-Date).ToUniversalTime()) {
+        $script:sessions.Remove($oz)
+        Save-Sessions
+        return $null
+    }
+    $u = Find-User $s.eposta
+    if (-not $u -or -not $u.aktif) { return $null }
+    return @{ eposta = $u.eposta; ad = $u.ad; rol = $u.rol; yetkiler = (Etkin-Yetkiler $u); oturum = $oz }
+}
+
+function Yetki-Gerek($ctx, [string]$yetki) {
+    $u = Get-Oturum $ctx
+    if (-not $u) {
+        SendJson $ctx 401 @{ ok = $false; giris = $true; error = "Giris yapin." }
+        return $null
+    }
+    $var = $true
+    if ($yetki -eq "yonetici") { $var = ($u.rol -eq "yonetici") }
+    elseif ($yetki) { $var = ($u.rol -eq "yonetici" -or ($u.yetkiler -contains $yetki)) }
+    if (-not $var) {
+        SendJson $ctx 403 @{ ok = $false; error = "Bu islem icin yetkiniz yok." }
+        return $null
+    }
+    return $u
+}
+
+function Etkin-Yetkiler($u) {
+    if ($u.rol -eq "yonetici") { return ,([string[]]$allPerms) }
+    return ,([string[]]@($u.yetkiler | Where-Object { $_ }))
+}
+
+function Ben-Nesne($ctx) {
+    $u = Get-Oturum $ctx
+    $kur = ((Count-ActiveAdmins "") -eq 0)
+    if (-not $u) { return @{ ok = $true; giris = $false; kurulum = $kur } }
+    return (Ben-Nesne2 $u $kur)
+}
+
+function Giris-Kilitli([string]$eposta, [string]$ip) {
+    $now = Get-Date
+    foreach ($k in @("e:" + $eposta, "i:" + $ip)) {
+        if ($script:locks.ContainsKey($k)) {
+            if ($script:locks[$k] -gt $now) { return $true }
+            $script:locks.Remove($k)
+        }
+    }
+    return $false
+}
+
+function Giris-Hata([string]$eposta, [string]$ip) {
+    $now = Get-Date
+    if ($script:fails.Count -gt 2000) { $script:fails = @{}; $script:locks = @{} }
+    foreach ($k in @("e:" + $eposta, "i:" + $ip)) {
+        $liste = New-Object System.Collections.ArrayList
+        if ($script:fails.ContainsKey($k)) { foreach ($t in $script:fails[$k]) { if ($t -gt $now.AddMinutes(-10)) { [void]$liste.Add($t) } } }
+        [void]$liste.Add($now)
+        if ($liste.Count -ge 5) {
+            $script:locks[$k] = $now.AddMinutes(5)
+            $script:fails.Remove($k)
+            Log "Giris 5 kez yanlis, 5 dakika kilitlendi: $k"
+        } else { $script:fails[$k] = $liste }
+    }
+}
+
+function Test-Eposta([string]$e) {
+    return ($e.Length -le 100 -and $e -match '^[^@\s;,"]+@[^@\s;,"]+$')
+}
+
+function Test-Giris-Kilit($ctx, [string]$eposta, [string]$ip) {
+    if (Giris-Kilitli $eposta $ip) {
+        SendJson $ctx 429 @{ ok = $false; error = "Cok fazla hatali giris. 5 dakika bekleyin." }
+        return $true
+    }
+    return $false
+}
+
+function Invoke-Giris($ctx) {
+    $b = Read-JsonBody $ctx
+    $eposta = ([string](Get-F $b "eposta")).Trim().ToLowerInvariant()
+    $sifre = [string](Get-F $b "sifre")
+    $ip = [string]$ctx.Request.RemoteEndPoint.Address
+    if (Test-Giris-Kilit $ctx $eposta $ip) { return }
+    $u = Find-User $eposta
+    $ok = Test-Sifre $u $sifre
+    if (-not $ok -or -not $u.aktif) {
+        Giris-Hata $eposta $ip
+        SendJson $ctx 401 @{ ok = $false; error = "E-posta ya da sifre yanlis." }
+        return
+    }
+    [void]$script:fails.Remove("e:" + $eposta)
+    [void](New-Session $ctx $u.eposta)
+    Log "Giris: $($u.eposta) ($ip)"
+    SendJson $ctx 200 (Ben-Nesne2 $u $false)
+}
+
+function Ben-Nesne2($u, [bool]$kur) {
+    $yet = Etkin-Yetkiler $u
+    return @{ ok = $true; giris = $true; kurulum = $kur; eposta = $u.eposta; ad = $u.ad; rol = $u.rol; yetkiler = $yet; fiyat = [bool]($yet -contains "fiyat") }
+}
+
+function Invoke-Cikis($ctx) {
+    $t = Get-Cookie $ctx
+    if ($t) {
+        $oz = Token-Ozet $t
+        if ($script:sessions.ContainsKey($oz)) { $script:sessions.Remove($oz); Save-Sessions }
+    }
+    $ctx.Response.AppendHeader("Set-Cookie", "fg_oturum=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax")
+    SendJson $ctx 200 @{ ok = $true }
+}
+
+function Invoke-Kurulum($ctx) {
+    $b = Read-JsonBody $ctx
+    $ip = [string]$ctx.Request.RemoteEndPoint.Address
+    if ((Count-ActiveAdmins "") -gt 0) { SendJson $ctx 403 @{ ok = $false; error = "Kurulum zaten yapilmis." }; return }
+    if (-not (Test-Path $pinFile)) { SendJson $ctx 403 @{ ok = $false; error = "Kurulum icin PIN dosyasi yok." }; return }
+    if (Test-Giris-Kilit $ctx "" $ip) { return }
+    $eposta = ([string](Get-F $b "eposta")).Trim().ToLowerInvariant()
+    $ad = ([string](Get-F $b "ad")).Trim()
+    $sifre = [string](Get-F $b "sifre")
+    if (-not (Test-EskiPin ([string](Get-F $b "pin")))) {
+        Giris-Hata "" $ip
+        SendJson $ctx 401 @{ ok = $false; error = "PIN yanlis." }
+        return
+    }
+    if (-not (Test-Eposta $eposta)) { SendJson $ctx 400 @{ ok = $false; error = "E-posta gecersiz." }; return }
+    if (-not $ad -or $ad.Length -gt 60) { SendJson $ctx 400 @{ ok = $false; error = "Ad gecersiz." }; return }
+    if ($sifre.Length -lt 8 -or $sifre.Length -gt 200) { SendJson $ctx 400 @{ ok = $false; error = "Sifre en az 8 karakter olmali." }; return }
+    $u = Find-User $eposta
+    if (-not $u) {
+        $u = @{ eposta = $eposta; ad = $ad; tuz = ""; ozet = ""; tur = 120000; rol = "yonetici"; yetkiler = [string[]]$allPerms; aktif = $true; olusturma = (Get-Date).ToString("o") }
+        [void]$script:users.Add($u)
+    } else {
+        $u.ad = $ad; $u.rol = "yonetici"; $u.yetkiler = [string[]]$allPerms; $u.aktif = $true
+    }
+    Set-Sifre $u $sifre
+    Save-Users
+    [void](New-Session $ctx $eposta)
+    Log "Ilk yonetici olusturuldu: $eposta ($ip)"
+    SendJson $ctx 200 (Ben-Nesne2 $u $false)
+}
+
+function Kullanici-Ozet($u) {
+    return @{ eposta = $u.eposta; ad = $u.ad; rol = $u.rol; yetkiler = [string[]]@($u.yetkiler); aktif = [bool]$u.aktif; olusturma = $u.olusturma }
+}
+
+function Invoke-Kullanicilar($ctx) {
+    $me = Yetki-Gerek $ctx "yonetici"
+    if (-not $me) { return }
+    if ($ctx.Request.HttpMethod -ne "POST") {
+        $liste = @()
+        foreach ($u in $script:users) { $liste += , (Kullanici-Ozet $u) }
+        SendJson $ctx 200 @{ ok = $true; kullanicilar = $liste; izinler = [string[]]$allPerms }
+        return
+    }
+    $b = Read-JsonBody $ctx
+    $islem = [string](Get-F $b "islem")
+    $eposta = ([string](Get-F $b "eposta")).Trim().ToLowerInvariant()
+    $ip = [string]$ctx.Request.RemoteEndPoint.Address
+    if ($islem -eq "ekle") {
+        $ad = ([string](Get-F $b "ad")).Trim()
+        $sifre = [string](Get-F $b "sifre")
+        $rol = $(if ([string](Get-F $b "rol") -eq "yonetici") { "yonetici" } else { "kullanici" })
+        if (-not (Test-Eposta $eposta)) { SendJson $ctx 400 @{ ok = $false; error = "E-posta gecersiz." }; return }
+        if (-not $ad -or $ad.Length -gt 60) { SendJson $ctx 400 @{ ok = $false; error = "Ad gecersiz." }; return }
+        if ($sifre.Length -lt 8 -or $sifre.Length -gt 200) { SendJson $ctx 400 @{ ok = $false; error = "Sifre en az 8 karakter olmali." }; return }
+        if (Find-User $eposta) { SendJson $ctx 409 @{ ok = $false; error = "Bu e-posta zaten kayitli." }; return }
+        $u = @{ eposta = $eposta; ad = $ad; tuz = ""; ozet = ""; tur = 120000; rol = $rol; yetkiler = (Clean-Perms (Get-F $b "yetkiler")); aktif = $true; olusturma = (Get-Date).ToString("o") }
+        Set-Sifre $u $sifre
+        [void]$script:users.Add($u)
+        Save-Users
+        Log "Kullanici eklendi: $eposta, $rol ($($me.eposta) $ip)"
+        SendJson $ctx 200 @{ ok = $true }
+        return
+    }
+    $u = Find-User $eposta
+    if (-not $u) { SendJson $ctx 404 @{ ok = $false; error = "Kullanici bulunamadi." }; return }
+    if ($islem -eq "guncelle") {
+        $ad = ([string](Get-F $b "ad")).Trim()
+        if (-not $ad -or $ad.Length -gt 60) { $ad = $u.ad }
+        $rol = $(if ([string](Get-F $b "rol") -eq "yonetici") { "yonetici" } else { "kullanici" })
+        $aktif = $(if ($null -ne (Get-F $b "aktif")) { [bool](Get-F $b "aktif") } else { $u.aktif })
+        if ($u.eposta -eq $me.eposta -and -not $aktif) { SendJson $ctx 400 @{ ok = $false; error = "Kendi hesabinizi pasif yapamazsiniz." }; return }
+        if ($u.rol -eq "yonetici" -and $u.aktif -and ($rol -ne "yonetici" -or -not $aktif) -and (Count-ActiveAdmins $u.eposta) -eq 0) {
+            SendJson $ctx 400 @{ ok = $false; error = "Son yonetici degistirilemez." }
+            return
+        }
+        $u.ad = $ad; $u.rol = $rol; $u.aktif = $aktif
+        $u.yetkiler = Clean-Perms (Get-F $b "yetkiler")
+        Save-Users
+        if (-not $aktif) { Remove-Sessions $u.eposta "" }
+        Log "Kullanici guncellendi: $eposta ($($me.eposta) $ip)"
+        SendJson $ctx 200 @{ ok = $true }
+        return
+    }
+    if ($islem -eq "sifre") {
+        $sifre = [string](Get-F $b "sifre")
+        if ($sifre.Length -lt 8 -or $sifre.Length -gt 200) { SendJson $ctx 400 @{ ok = $false; error = "Sifre en az 8 karakter olmali." }; return }
+        Set-Sifre $u $sifre
+        Save-Users
+        Remove-Sessions $u.eposta $(if ($u.eposta -eq $me.eposta) { [string]$me.oturum } else { "" })
+        Log "Kullanici sifresi sifirlandi: $eposta ($($me.eposta) $ip)"
+        SendJson $ctx 200 @{ ok = $true }
+        return
+    }
+    if ($islem -eq "sil") {
+        if ($u.eposta -eq $me.eposta) { SendJson $ctx 400 @{ ok = $false; error = "Kendi hesabinizi silemezsiniz." }; return }
+        if ($u.rol -eq "yonetici" -and $u.aktif -and (Count-ActiveAdmins $u.eposta) -eq 0) { SendJson $ctx 400 @{ ok = $false; error = "Son yonetici silinemez." }; return }
+        [void]$script:users.Remove($u)
+        Save-Users
+        Remove-Sessions $u.eposta ""
+        Log "Kullanici silindi: $eposta ($($me.eposta) $ip)"
+        SendJson $ctx 200 @{ ok = $true }
+        return
+    }
+    SendJson $ctx 400 @{ ok = $false; error = "Islem gecersiz." }
+}
+
+function Invoke-Sifrem($ctx) {
+    $me = Yetki-Gerek $ctx ""
+    if (-not $me) { return }
+    $b = Read-JsonBody $ctx
+    $ip = [string]$ctx.Request.RemoteEndPoint.Address
+    $yeni = [string](Get-F $b "yeni")
+    if (Test-Giris-Kilit $ctx $me.eposta $ip) { return }
+    $u = Find-User $me.eposta
+    if (-not (Test-Sifre $u ([string](Get-F $b "eski")))) {
+        Giris-Hata $me.eposta $ip
+        SendJson $ctx 401 @{ ok = $false; error = "Mevcut sifre yanlis." }
+        return
+    }
+    if ($yeni.Length -lt 8 -or $yeni.Length -gt 200) { SendJson $ctx 400 @{ ok = $false; error = "Sifre en az 8 karakter olmali." }; return }
+    Set-Sifre $u $yeni
+    Save-Users
+    Remove-Sessions $u.eposta ([string]$me.oturum)
+    Log "Sifre degisti: $($u.eposta) ($ip)"
+    SendJson $ctx 200 @{ ok = $true }
+}
+
+try { Load-Users } catch { Log "Kullanicilar okunamadi: $($_.Exception.Message)" }
+try { Load-Sessions } catch { Log "Oturumlar okunamadi: $($_.Exception.Message)" }
 
 function Read-JsonBody($ctx) {
     if ($ctx.Request.ContentLength64 -gt 20000) { throw "istek cok buyuk" }
@@ -324,11 +716,9 @@ function Get-Ozel([int]$stok) {
 }
 
 function Set-Ozel($ctx) {
+    $u = Yetki-Gerek $ctx "ekle"
+    if (-not $u) { return }
     $b = Read-JsonBody $ctx
-    $pinState = Test-Pin ([string]$b["pin"])
-    if ($pinState -eq "kapali") { SendJson $ctx 403 @{ ok = $false; error = "Degistirme kapali. Kurulumda PIN belirlenmedi." }; return }
-    if ($pinState -eq "kilitli") { SendJson $ctx 423 @{ ok = $false; error = "Cok fazla yanlis PIN. 5 dakika bekleyin." }; return }
-    if ($pinState -ne "ok") { SendJson $ctx 401 @{ ok = $false; error = "PIN yanlis." }; return }
     $stok = [int]$b["stok"]
     $oz = $b["ozel"]
     if ($stok -le 0 -or -not $oz) { SendJson $ctx 400 @{ ok = $false; error = "Gecersiz istek." }; return }
@@ -354,7 +744,7 @@ function Set-Ozel($ctx) {
         $n = [int]$cmd.ExecuteScalar()
     } finally { $conn.Close() }
     if ($n -ne 1) { SendJson $ctx 404 @{ ok = $false; error = "Urun bulunamadi." }; return }
-    $ip = [string]$ctx.Request.RemoteEndPoint.Address
+    $ip = $u.eposta + " " + [string]$ctx.Request.RemoteEndPoint.Address
     $ozet = ($keys | ForEach-Object { "KOD$_=" + $vals[$_] }) -join " "
     Add-Content -Path $changeLog -Value ("{0:yyyy-MM-dd HH:mm:ss};OZELKOD;{1};{2};{3}" -f (Get-Date), $stok, $ozet.Replace(";", " "), $ip) -Encoding UTF8
     Log "Ozel kod degisti: stok $stok, $ozet ($ip)"
@@ -454,11 +844,9 @@ function Send-Icerik([int]$kod, [string]$metin) {
 }
 
 function Set-Icerik($ctx) {
+    $u = Yetki-Gerek $ctx "icerik"
+    if (-not $u) { return }
     $b = Read-JsonBody $ctx
-    $pinState = Test-Pin ([string]$b["pin"])
-    if ($pinState -eq "kapali") { SendJson $ctx 403 @{ ok = $false; error = "Degistirme kapali. Kurulumda PIN belirlenmedi." }; return }
-    if ($pinState -eq "kilitli") { SendJson $ctx 423 @{ ok = $false; error = "Cok fazla yanlis PIN. 5 dakika bekleyin." }; return }
-    if ($pinState -ne "ok") { SendJson $ctx 401 @{ ok = $false; error = "PIN yanlis." }; return }
     $kod = [int]$b["kod"]
     $metin = [string]$b["metin"]
     if ($kod -le 0 -or $kod -gt 9999) { SendJson $ctx 400 @{ ok = $false; error = "Icerik kodu 1-9999 olmali." }; return }
@@ -467,7 +855,7 @@ function Set-Icerik($ctx) {
     $res = (Invoke-CLHelper @("-IcerikYaz", "-Item", "$kod", "-TextB64", $b64) | Where-Object { $_ } | Select-Object -Last 1)
     $script:icerikCache = $null
     if (-not ($res -like "OK icerik-*")) { Log "Icerik yazilamadi: $kod -> $res"; SendJson $ctx 500 @{ ok = $false; error = "CL'ye yazilamadi: $res" }; return }
-    $ip = [string]$ctx.Request.RemoteEndPoint.Address
+    $ip = $u.eposta + " " + [string]$ctx.Request.RemoteEndPoint.Address
     Add-Content -Path $changeLog -Value ("{0:yyyy-MM-dd HH:mm:ss};ICERIK;{1};{2};{3}" -f (Get-Date), $kod, ($res -split " ")[1], $ip) -Encoding UTF8
     Log "Icerik kaydedildi: $kod ($res, $ip)"
     $teraziMesaj = ""
@@ -483,11 +871,9 @@ function Set-Icerik($ctx) {
 }
 
 function Add-Unit($ctx) {
+    $u = Yetki-Gerek $ctx "ekle"
+    if (-not $u) { return }
     $b = Read-JsonBody $ctx
-    $pinState = Test-Pin ([string]$b["pin"])
-    if ($pinState -eq "kapali") { SendJson $ctx 403 @{ ok = $false; error = "Degistirme kapali. Kurulumda PIN belirlenmedi." }; return }
-    if ($pinState -eq "kilitli") { SendJson $ctx 423 @{ ok = $false; error = "Cok fazla yanlis PIN. 5 dakika bekleyin." }; return }
-    if ($pinState -ne "ok") { SendJson $ctx 401 @{ ok = $false; error = "PIN yanlis." }; return }
     $stok = [int]$b["stok"]
     $birim = ([string]$b["birim"]).Trim().ToUpperInvariant()
     $barkod = ([string]$b["barkod"]).Trim()
@@ -549,7 +935,7 @@ SELECT @yeni AS sonuc, N'' AS neden, N'' AS ad;
         return
     }
     $script:cache = $null
-    $ip = [string]$ctx.Request.RemoteEndPoint.Address
+    $ip = $u.eposta + " " + [string]$ctx.Request.RemoteEndPoint.Address
     Add-Content -Path $changeLog -Value ("{0:yyyy-MM-dd HH:mm:ss};BIRIM;{1};{2};{3};{4};{5};{6}" -f (Get-Date), $stok, $birim, $agirlik, $barkod, $fiyat, $ip) -Encoding UTF8
     Log "Birim eklendi: stok $stok, $birim $agirlik kg, $barkod, $fiyat ($ip)"
     SendJson $ctx 200 @{ ok = $true; ind = [int]$sonuc }
@@ -609,11 +995,9 @@ function Get-StokBilgi([int]$stok) {
 }
 
 function Add-StokGiris($ctx) {
+    $u = Yetki-Gerek $ctx "stok"
+    if (-not $u) { return }
     $b = Read-JsonBody $ctx
-    $pinState = Test-Pin ([string]$b["pin"])
-    if ($pinState -eq "kapali") { SendJson $ctx 403 @{ ok = $false; error = "Degistirme kapali. Kurulumda PIN belirlenmedi." }; return }
-    if ($pinState -eq "kilitli") { SendJson $ctx 423 @{ ok = $false; error = "Cok fazla yanlis PIN. 5 dakika bekleyin." }; return }
-    if ($pinState -ne "ok") { SendJson $ctx 401 @{ ok = $false; error = "PIN yanlis." }; return }
     $stok = [int]$b["stok"]
     $miktar = [decimal]$b["miktar"]
     if ($stok -le 0) { SendJson $ctx 400 @{ ok = $false; error = "Urun secilmedi." }; return }
@@ -678,7 +1062,7 @@ SELECT @bas AS sonuc, @belge AS belge, @kalan AS kalan;
         $r.Close()
     } finally { $conn.Close() }
     if ($sonuc -le 0) { SendJson $ctx 404 @{ ok = $false; error = "Urun bulunamadi." }; return }
-    $ip = [string]$ctx.Request.RemoteEndPoint.Address
+    $ip = $u.eposta + " " + [string]$ctx.Request.RemoteEndPoint.Address
     Add-Content -Path $changeLog -Value ("{0:yyyy-MM-dd HH:mm:ss};STOKGIRIS;{1};{2};{3};{4}" -f (Get-Date), $stok, $miktar, $belge, $ip) -Encoding UTF8
     Log "Stok girisi: stok $stok, +$miktar, $belge ($P, $ip)"
     SendJson $ctx 200 @{ ok = $true; belge = $belge; kalan = [double]$kalan; miktar = [double]$miktar }
@@ -753,11 +1137,9 @@ WHERE ISNULL(s.DELETED, 0) = 0 ORDER BY s.MALINCINSI;
 }
 
 function Invoke-Devir($ctx) {
+    $u = Yetki-Gerek $ctx "devir"
+    if (-not $u) { return }
     $b = Read-JsonBody $ctx
-    $pinState = Test-Pin ([string]$b["pin"])
-    if ($pinState -eq "kapali") { SendJson $ctx 403 @{ ok = $false; error = "Degistirme kapali. Kurulumda PIN belirlenmedi." }; return }
-    if ($pinState -eq "kilitli") { SendJson $ctx 423 @{ ok = $false; error = "Cok fazla yanlis PIN. 5 dakika bekleyin." }; return }
-    if ($pinState -ne "ok") { SendJson $ctx 401 @{ ok = $false; error = "PIN yanlis." }; return }
     $K = [string]$b["kaynak"]; $H = [string]$b["hedef"]
     if ($K -eq $H -or -not (Test-DonemAdi $K) -or -not (Test-DonemAdi $H)) { SendJson $ctx 400 @{ ok = $false; error = "Donem secimi gecersiz." }; return }
     if ([int]($K.Substring(6)) -ge [int]($H.Substring(6))) { SendJson $ctx 400 @{ ok = $false; error = "Kaynak donem hedef donemden once olmali." }; return }
@@ -830,7 +1212,7 @@ SELECT @bas AS sonuc, @belge AS belge, @adet AS adet, @toplam AS toplam;
     if ($sonuc -eq -2) { SendJson $ctx 409 @{ ok = $false; error = "Bu donemden devir daha once yapilmis. Ikinci kez yapilmaz." }; return }
     if ($sonuc -eq -3) { SendJson $ctx 400 @{ ok = $false; error = "Kaynak donemde kalani olan urun yok." }; return }
     if ($sonuc -le 0) { SendJson $ctx 500 @{ ok = $false; error = "Devir yapilamadi." }; return }
-    $ip = [string]$ctx.Request.RemoteEndPoint.Address
+    $ip = $u.eposta + " " + [string]$ctx.Request.RemoteEndPoint.Address
     Add-Content -Path $changeLog -Value ("{0:yyyy-MM-dd HH:mm:ss};DEVIR;{1};{2};{3};{4};{5}" -f (Get-Date), $K, $H, $belge, $adet, $ip) -Encoding UTF8
     Log "Devir: $K -> $H, $adet urun, $belge ($ip)"
     SendJson $ctx 200 @{ ok = $true; belge = $belge; adet = $adet; toplam = $toplam }
@@ -918,11 +1300,9 @@ function TeraziPlu([string]$stokKodu) {
 }
 
 function Set-Price($ctx) {
+    $u = Yetki-Gerek $ctx "fiyat"
+    if (-not $u) { return }
     $b = Read-JsonBody $ctx
-    $pinState = Test-Pin ([string]$b["pin"])
-    if ($pinState -eq "kapali") { SendJson $ctx 403 @{ ok = $false; error = "Fiyat degistirme kapali. Kurulumda PIN belirlenmedi." }; return }
-    if ($pinState -eq "kilitli") { SendJson $ctx 423 @{ ok = $false; error = "Cok fazla yanlis PIN. 5 dakika bekleyin." }; return }
-    if ($pinState -ne "ok") { SendJson $ctx 401 @{ ok = $false; error = "PIN yanlis." }; return }
     $stok = [int]$b["stok"]
     $list = @($b["degisiklikler"])
     if ($stok -le 0 -or $list.Count -lt 1 -or $list.Count -gt 30) { SendJson $ctx 400 @{ ok = $false; error = "Gecersiz istek." }; return }
@@ -956,7 +1336,7 @@ function Set-Price($ctx) {
         $conn.Close()
     }
     $script:cache = $null
-    $ip = [string]$ctx.Request.RemoteEndPoint.Address
+    $ip = $u.eposta + " " + [string]$ctx.Request.RemoteEndPoint.Address
     $line = "{0:yyyy-MM-dd HH:mm:ss};FIYAT;{1};{2};{3};{4}" -f (Get-Date), $stok, ([string]$b["ad"]).Replace(";", " "), ($done -join " "), $ip
     Add-Content -Path $changeLog -Value $line -Encoding UTF8
     Log "Fiyat degisti: stok $stok, $($done -join ' ') ($ip)"
@@ -1045,11 +1425,9 @@ function Get-Lists {
 }
 
 function Add-Product($ctx) {
+    $u = Yetki-Gerek $ctx "ekle"
+    if (-not $u) { return }
     $b = Read-JsonBody $ctx
-    $pinState = Test-Pin ([string]$b["pin"])
-    if ($pinState -eq "kapali") { SendJson $ctx 403 @{ ok = $false; error = "Urun ekleme kapali. Kurulumda PIN belirlenmedi." }; return }
-    if ($pinState -eq "kilitli") { SendJson $ctx 423 @{ ok = $false; error = "Cok fazla yanlis PIN. 5 dakika bekleyin." }; return }
-    if ($pinState -ne "ok") { SendJson $ctx 401 @{ ok = $false; error = "PIN yanlis." }; return }
     $ad = ([string]$b["ad"]).Trim()
     $kod = ([string]$b["stokKodu"]).Trim()
     $barkod = ([string]$b["barkod"]).Trim()
@@ -1171,7 +1549,7 @@ SELECT @s AS sonuc, N'' AS neden, CAST(@bi AS nvarchar(20)) AS ad;
         return
     }
     $script:cache = $null
-    $ip = [string]$ctx.Request.RemoteEndPoint.Address
+    $ip = $u.eposta + " " + [string]$ctx.Request.RemoteEndPoint.Address
     $line = "{0:yyyy-MM-dd HH:mm:ss};EKLE;{1};{2};{3};{4};{5}" -f (Get-Date), $sonuc, $kod, $ad.Replace(";", " "), $f1, $ip
     Add-Content -Path $changeLog -Value $line -Encoding UTF8
     Log "Urun eklendi: $kod $ad ($ip)"
@@ -1226,9 +1604,48 @@ function Handle($ctx) {
         }
         return
     }
-    if ($path -eq "/api/yetki") {
-        $pinVar = [bool](Test-Path $pinFile)
-        SendJson $ctx 200 @{ ok = $true; fiyat = $pinVar }
+    if ($path -eq "/api/ben" -or $path -eq "/api/yetki") {
+        SendJson $ctx 200 (Ben-Nesne $ctx)
+        return
+    }
+    if ($path -eq "/api/giris") {
+        if ($ctx.Request.HttpMethod -ne "POST") { SendJson $ctx 405 @{ ok = $false; error = "POST gerekli" }; return }
+        try { Invoke-Giris $ctx } catch {
+            Log "Giris hatasi: $($_.Exception.Message)"
+            SendJson $ctx 500 @{ ok = $false; error = "Giris yapilamadi." }
+        }
+        return
+    }
+    if ($path -eq "/api/cikis") {
+        if ($ctx.Request.HttpMethod -ne "POST") { SendJson $ctx 405 @{ ok = $false; error = "POST gerekli" }; return }
+        try { Invoke-Cikis $ctx } catch { SendJson $ctx 500 @{ ok = $false; error = [string]$_.Exception.Message } }
+        return
+    }
+    if ($path -eq "/api/kurulum") {
+        if ($ctx.Request.HttpMethod -ne "POST") { SendJson $ctx 405 @{ ok = $false; error = "POST gerekli" }; return }
+        try { Invoke-Kurulum $ctx } catch {
+            Log "Kurulum hatasi: $($_.Exception.Message)"
+            SendJson $ctx 500 @{ ok = $false; error = "Kurulum yapilamadi." }
+        }
+        return
+    }
+    if ($path.StartsWith("/api/") -and -not (Get-Oturum $ctx)) {
+        SendJson $ctx 401 @{ ok = $false; giris = $true; error = "Giris yapin." }
+        return
+    }
+    if ($path -eq "/api/kullanicilar") {
+        try { Invoke-Kullanicilar $ctx } catch {
+            Log "Kullanici hatasi: $($_.Exception.Message)"
+            SendJson $ctx 500 @{ ok = $false; error = [string]$_.Exception.Message }
+        }
+        return
+    }
+    if ($path -eq "/api/sifrem") {
+        if ($ctx.Request.HttpMethod -ne "POST") { SendJson $ctx 405 @{ ok = $false; error = "POST gerekli" }; return }
+        try { Invoke-Sifrem $ctx } catch {
+            Log "Sifre hatasi: $($_.Exception.Message)"
+            SendJson $ctx 500 @{ ok = $false; error = [string]$_.Exception.Message }
+        }
         return
     }
     if ($path -eq "/api/birimler") {
@@ -1244,6 +1661,7 @@ function Handle($ctx) {
     }
     if ($path -eq "/api/guncelle") {
         if ($ctx.Request.HttpMethod -ne "POST") { SendJson $ctx 405 @{ ok = $false; error = "POST gerekli" }; return }
+        if (-not (Yetki-Gerek $ctx "yonetici")) { return }
         try {
             $ok = Update-Web
             $script:cache = $null
@@ -1292,6 +1710,8 @@ function Handle($ctx) {
     if ($path -eq "/api/etiket") {
         try {
             if ($ctx.Request.HttpMethod -eq "POST") {
+                $u = Yetki-Gerek $ctx "etiket"
+                if (-not $u) { return }
                 $kopya = [int]("0" + [string]$ctx.Request.QueryString["kopya"])
                 if ($kopya -lt 1 -or $kopya -gt 50) { SendJson $ctx 400 @{ ok = $false; error = "Kopya sayisi 1-50 olmali." }; return }
                 if ($ctx.Request.ContentLength64 -le 0 -or $ctx.Request.ContentLength64 -gt 2MB) { SendJson $ctx 400 @{ ok = $false; error = "Etiket resmi gecersiz." }; return }
@@ -1300,7 +1720,7 @@ function Handle($ctx) {
                 $png = $buf.ToArray()
                 if ($png.Length -lt 8 -or $png[0] -ne 0x89 -or $png[1] -ne 0x50) { SendJson $ctx 400 @{ ok = $false; error = "Etiket resmi PNG degil." }; return }
                 $yazici = Print-Label $png $kopya
-                Log ("Etiket yazdirildi: {0} kopya, {1} ({2})" -f $kopya, ([string]$ctx.Request.QueryString["ad"]), $yazici)
+                Log ("Etiket yazdirildi: {0} kopya, {1} ({2}, {3})" -f $kopya, ([string]$ctx.Request.QueryString["ad"]), $yazici, $u.eposta)
                 SendJson $ctx 200 @{ ok = $true; yazici = [string]$yazici; kopya = $kopya }
             } else {
                 $q = [int]("0" + [string]$ctx.Request.QueryString["ind"])

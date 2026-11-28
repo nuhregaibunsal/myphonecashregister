@@ -238,3 +238,25 @@ summary { cursor: pointer; color: var(--muted); padding: 6px 0; }
 #devirBox summary { color: var(--text); font-weight: 650; }
 #dvListe { max-height: 320px; overflow: auto; margin-bottom: 10px; }
 #dvListe li { cursor: default; }
+.giris { position: fixed; inset: 0; z-index: 100; overflow-y: auto; background: var(--ink); display: flex; align-items: center; justify-content: center; padding: 24px 16px; border-top: 6px solid var(--label); }
+.giris-kutu { width: 100%; max-width: 380px; background: var(--card); color: var(--text); border-radius: 16px; padding: 24px 20px; display: flex; flex-direction: column; gap: 10px; }
+.giris-baslik { margin: 0; font: 30px/1.1 "Tezgah Display", system-ui, sans-serif; letter-spacing: .01em; }
+.giris-alt { margin: 0 0 6px; color: var(--muted); font-size: 15px; }
+.giris-kutu label, .card form > label, #kulDuzenle form > label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.giris-kutu .btn.big { flex: none; margin-top: 4px; }
+.hesap-ad { display: flex; flex-direction: column; margin: 0 0 10px; }
+#sifreForm, #kulForm { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.kul-liste li { cursor: default; flex-wrap: wrap; align-items: flex-start; }
+.kul-liste .info { flex: 1 1 200px; min-width: 0; }
+.kul-liste .info b, .kul-liste .info .muted { overflow-wrap: anywhere; }
+.kul-liste .kul-ep { display: block; }
+.kul-etiket { display: inline-block; margin: 4px 4px 0 0; padding: 2px 8px; border-radius: 999px; font-size: 12px; background: var(--warn-bg); color: var(--text); }
+.kul-etiket.rol { background: var(--ink); color: var(--ink-text); }
+.kul-etiket.pasif { background: var(--err-bg); color: var(--err); }
+.kul-islem { display: flex; gap: 6px; flex-wrap: wrap; flex: 1 1 100%; }
+.kul-islem .btn { padding: 6px 10px; font-size: 14px; }
+.kul-yetkiler { margin: 4px 0 8px; }
+.kul-yetkiler .check { margin: 6px 0; font-size: 15px; color: var(--text); }
+#kulDuzenle input:not([type=checkbox]) { font-size: 16px; text-align: left; margin: 0; }
+#kulDuzenle form { display: flex; flex-direction: column; gap: 8px; }
+#kulEkleBox summary { font-weight: 650; padding: 6px 0; }

@@ -29,6 +29,19 @@
   <button class="btn" id="bgDugme" type="button">Tekrar dene</button>
 </div>
 <div class="alanuyari" id="alanUyari" hidden><span id="alanUyariYazi"></span><button type="button" id="alanUyariKapat" aria-label="Kapat">✕</button></div>
+<div class="giris" id="giris" hidden>
+  <form class="giris-kutu" id="girisForm" autocomplete="on">
+    <h1 class="giris-baslik">Fiyat Gör</h1>
+    <p class="giris-alt" id="girisAlt">Devam etmek için hesabınla giriş yap.</p>
+    <label id="gAdL" hidden>Ad soyad<input id="gAd" autocomplete="name"></label>
+    <label>E-posta<input id="gEposta" type="email" inputmode="email" autocomplete="username" autocapitalize="none" spellcheck="false"></label>
+    <label>Şifre<input id="gSifre" type="password" autocomplete="current-password"></label>
+    <label id="gSifre2L" hidden>Şifre tekrar<input id="gSifre2" type="password" autocomplete="new-password"></label>
+    <label id="gPinL" hidden>Mevcut PIN<input id="gPin" type="password" inputmode="numeric" autocomplete="off"></label>
+    <p class="msg" id="gMsg"></p>
+    <button class="btn primary big" id="gBtn" type="submit">Giriş yap</button>
+  </form>
+</div>
 <main>
     <div class="scanner" id="scanner" hidden>
       <video id="video" playsinline muted></video>
@@ -107,9 +120,8 @@
       <p class="muted" id="fInfo"></p>
       <p class="msg" id="fTerazi" hidden></p>
       <p>Şu anki fiyat: <strong id="fOld"></strong></p>
-      <div class="grid">
+      <div class="grid" id="fYeniGrid">
         <label><span id="fNewLabel">Yeni fiyat</span><input id="fNew" inputmode="decimal" autocomplete="off"></label>
-        <label>PIN<input id="fPin" type="password" inputmode="numeric" autocomplete="off"></label>
       </div>
       <div id="fUnitsBox" hidden>
         <p class="muted small">Bu ürünün bütün birimleri birlikte değişir. Yeni fiyatlar ağırlığa göre hesaplandı, istersen düzelt.</p>
@@ -127,7 +139,7 @@
           <label>Barkod<input id="bBarkod" inputmode="numeric" autocomplete="off"></label>
           <label>Satış fiyatı<input id="bFiyat" inputmode="decimal" autocomplete="off"></label>
         </div>
-        <p class="muted small">Fiyat ağırlığa göre ana birimden hesaplanır, istersen değiştir. PIN yukarıdaki kutudan alınır.</p>
+        <p class="muted small">Fiyat ağırlığa göre ana birimden hesaplanır, istersen değiştir.</p>
         <button class="btn primary" id="bEkle" type="button">Birimi ekle</button>
         <p class="msg" id="bMsg"></p>
       </details>
@@ -149,7 +161,6 @@
             <label>Renk<input id="fOk9" list="dlOk9" autocomplete="off"></label>
           </div>
         </details>
-        <p class="muted small">PIN yukarıdaki kutudan alınır.</p>
         <button class="btn primary" id="fOkKaydet" type="button">Özel kodları kaydet</button>
         <p class="msg" id="fOkMsg"></p>
       </details>
@@ -245,7 +256,6 @@
           <label>Üretici<input id="aUretici"></label>
         </details>
         <p class="muted small" id="aStd"></p>
-        <label>PIN<input id="aPin" type="password" inputmode="numeric" autocomplete="off"></label>
         <p class="msg" id="aMsg"></p>
         <div class="row">
           <button class="btn" id="aClear" type="button">Temizle</button>
@@ -285,7 +295,6 @@
       <div id="dvSonuc" hidden>
         <p class="sd-toplam" id="dvOzet"></p>
         <ul class="list" id="dvListe"></ul>
-        <label class="sd-pin">PIN<input id="dvPin" type="password" inputmode="numeric" autocomplete="off"></label>
         <button class="btn primary" id="dvDevret" type="button">Devret</button>
       </div>
     </details>
@@ -320,7 +329,6 @@
       <h3>Önizleme</h3>
       <div class="icerik-onizle" id="iOnizle"></div>
       <label class="check"><input type="checkbox" id="iGonder" checked> Kaydedince paket terazilerine gönder (192.168.1.153, 192.168.1.204)</label>
-      <label>PIN<input id="iPin" type="password" inputmode="numeric" autocomplete="off"></label>
       <p class="msg" id="iKayitMsg"></p>
       <div class="row">
         <button class="btn" id="iVazgec" type="button">Vazgeç</button>
@@ -330,6 +338,56 @@
   </section>
 
   <section id="tab-ayarlar" class="tab">
+    <div class="card" id="hesapCard" hidden>
+      <h2>Hesabım</h2>
+      <p class="hesap-ad"><b id="hesapAd"></b><span class="muted small" id="hesapEposta"></span></p>
+      <div class="row">
+        <button class="btn" id="sifreAc" type="button">Şifremi değiştir</button>
+        <button class="btn danger" id="cikisBtn" type="button">Çıkış yap</button>
+      </div>
+      <form id="sifreForm" hidden autocomplete="off">
+        <label>Mevcut şifre<input id="sfEski" type="password" autocomplete="current-password"></label>
+        <label>Yeni şifre (en az 8 karakter)<input id="sfYeni" type="password" autocomplete="new-password"></label>
+        <label>Yeni şifre tekrar<input id="sfYeni2" type="password" autocomplete="new-password"></label>
+        <div class="row">
+          <button class="btn" id="sfVazgec" type="button">Vazgeç</button>
+          <button class="btn primary" type="submit">Şifreyi kaydet</button>
+        </div>
+      </form>
+      <p class="msg" id="sfMsg"></p>
+    </div>
+    <div class="card" id="kullaniciCard" hidden>
+      <h2>Kullanıcılar</h2>
+      <p class="muted small">Hesapları sadece yönetici açar. Yönetici her şeyi yapabilir; kullanıcı yalnızca işaretlediğin yetkileri kullanır.</p>
+      <ul class="list kul-liste" id="kulListe"></ul>
+      <p class="msg" id="kulMsg"></p>
+      <details id="kulEkleBox">
+        <summary>＋ Kullanıcı ekle</summary>
+        <form id="kulForm" autocomplete="off">
+          <label>Ad soyad<input id="kfAd" autocomplete="off"></label>
+          <label>E-posta<input id="kfEposta" type="email" inputmode="email" autocomplete="off" autocapitalize="none"></label>
+          <label>Şifre (en az 8 karakter)<input id="kfSifre" type="text" autocomplete="off" autocapitalize="none"></label>
+          <label>Rol<select id="kfRol"><option value="kullanici">Kullanıcı</option><option value="yonetici">Yönetici</option></select></label>
+          <div class="kul-yetkiler" id="kfYetkiler"></div>
+          <button class="btn primary" type="submit">Kullanıcıyı ekle</button>
+          <p class="msg" id="kfMsg"></p>
+        </form>
+      </details>
+      <dialog id="kulDuzenle">
+        <form id="kdForm" method="dialog">
+          <h3 id="kdBaslik"></h3>
+          <label>Ad soyad<input id="kdAd" autocomplete="off"></label>
+          <label>Rol<select id="kdRol"><option value="kullanici">Kullanıcı</option><option value="yonetici">Yönetici</option></select></label>
+          <div class="kul-yetkiler" id="kdYetkiler"></div>
+          <label class="check"><input type="checkbox" id="kdAktif"> Hesap aktif</label>
+          <p class="msg" id="kdMsg"></p>
+          <div class="row">
+            <button class="btn" id="kdVazgec" type="button">Vazgeç</button>
+            <button class="btn primary" id="kdKaydet" type="submit">Kaydet</button>
+          </div>
+        </form>
+      </dialog>
+    </div>
     <div class="card">
       <h2>Alt menü</h2>
       <p class="muted small">Alttaki çubukta görünecek sekmeleri seç. Ayarlar her zaman görünür. Bu ayar sadece bu telefonda geçerli.</p>
@@ -425,7 +483,6 @@
     <label>Çarpan<input id="sdCarpan" inputmode="decimal" value="1" autocomplete="off"></label>
   </div>
   <p class="sd-toplam" id="sdToplam"></p>
-  <label class="sd-pin">PIN<input id="sdPin" type="password" inputmode="numeric" autocomplete="off"></label>
   <p class="msg" id="sdMsg"></p>
   <div class="row">
     <button class="btn" id="sdVazgec" type="button">Vazgeç</button>

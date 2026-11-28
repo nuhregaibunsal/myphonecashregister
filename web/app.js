@@ -115,11 +115,12 @@
     const t = setTimeout(() => ctrl.abort(), 10000);
     try {
       let res;
-      try { res = await fetch("api/urunler", { cache: "no-store", signal: ctrl.signal }); }
+      try { res = await apiFetch("api/urunler", { cache: "no-store", signal: ctrl.signal }); }
       catch (err) { throw { tip: err && err.name === "AbortError" ? "zaman" : "ag" }; }
       const json = /json/.test(res.headers.get("content-type") || "");
       if (!res.ok) {
         const j = json ? await res.json().catch(() => null) : null;
+        if (res.status === 401 && j && j.giris) throw { tip: "giris" };
         throw j && j.error ? { tip: "sql", kod: res.status, mesaj: j.error } : { tip: "http", kod: res.status };
       }
       if (!json) throw { tip: "oturum", kod: res.status };
@@ -142,6 +143,13 @@
       renderInfo();
       return true;
     } catch (e) {
+      if (e && e.tip === "giris") {
+        live = false;
+        baglantiHata = null;
+        baglantiGoster();
+        if ($("giris").hidden) girisGoster();
+        return false;
+      }
       baglantiHata = e && e.tip ? e : { tip: "ag" };
       live = false;
       renderInfo();
@@ -152,26 +160,271 @@
     }
   }
 
-  let canEditPrice = false, pinCache = "", pinAt = 0;
+  let me = null, girisKurulum = false;
+  const can = k => !!(me && me.giris && (me.rol === "yonetici" || (me.yetkiler || []).includes(k)));
+  const fiyatSekmesi = () => can("fiyat") || can("etiket") || can("ekle");
+
+  async function apiFetch(url, opt) {
+    const res = await fetch(url, Object.assign({ credentials: "same-origin" }, opt || {}));
+    if (res.status === 401 && !/^api\/(giris|kurulum|ben|cikis)/.test(String(url))) {
+      res.clone().json().then(j => { if (j && j.giris) girisGoster(); }).catch(() => { });
+    }
+    return res;
+  }
 
   async function loadRights() {
     try {
-      const res = await fetch("api/yetki", { cache: "no-store" });
+      const res = await fetch("api/ben", { cache: "no-store", credentials: "same-origin" });
+      if (!/json/.test(res.headers.get("content-type") || "")) return "hata";
       const j = await res.json();
-      canEditPrice = !!(j && j.fiyat);
-    } catch (e) { canEditPrice = false; }
+      if (!j || !j.ok) return "hata";
+      girisKurulum = !!j.kurulum;
+      me = j.giris ? j : null;
+      return j.giris ? "ok" : "giris";
+    } catch (e) { return "hata"; }
+  }
+
+  function gMsg(text, kind) {
+    $("gMsg").textContent = text || "";
+    $("gMsg").className = "msg " + (kind || "");
+  }
+
+  function girisGoster() {
+    me = null;
+    live = false;
+    baglantiHata = null;
+    $("baglanti").hidden = true;
+    const k = girisKurulum;
+    $("girisAlt").textContent = k ? "İlk yönetici hesabını oluştur" : "Devam etmek için hesabınla giriş yap.";
+    $("gAdL").hidden = !k;
+    $("gSifre2L").hidden = !k;
+    $("gPinL").hidden = !k;
+    $("gBtn").textContent = k ? "Hesabı oluştur" : "Giriş yap";
+    $("gSifre").autocomplete = k ? "new-password" : "current-password";
+    gMsg("");
+    $("giris").hidden = false;
+    setTimeout(() => { try { (k ? $("gAd") : $("gEposta")).focus(); } catch (e) { } }, 50);
+  }
+
+  async function girisGonder(e) {
+    e.preventDefault();
+    const eposta = $("gEposta").value.trim();
+    const sifre = $("gSifre").value;
+    if (!eposta || !sifre) { gMsg("E-posta ve şifreyi yaz.", "err"); return; }
+    let url = "api/giris", body = { eposta, sifre };
+    if (girisKurulum) {
+      const ad = $("gAd").value.trim();
+      const pin = $("gPin").value.trim();
+      if (!ad) { gMsg("Adını yaz.", "err"); return; }
+      if (sifre.length < 8) { gMsg("Şifre en az 8 karakter olmalı.", "err"); return; }
+      if (sifre !== $("gSifre2").value) { gMsg("İki şifre aynı değil.", "err"); return; }
+      if (!pin) { gMsg("Mevcut PIN'i yaz.", "err"); return; }
+      url = "api/kurulum";
+      body = { eposta, ad, sifre, pin };
+    }
+    $("gBtn").disabled = true;
+    gMsg("Bekleyin…");
+    try {
+      const res = await apiFetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok && j.ok && j.giris) {
+        ["gSifre", "gSifre2", "gPin"].forEach(id => { $(id).value = ""; });
+        me = j;
+        girisKurulum = false;
+        $("giris").hidden = true;
+        gMsg("");
+        if (!liveHazir) startLive(); else { updatePriceTab(); syncLive(); }
+      } else {
+        gMsg(j.error || ("Giriş yapılamadı (" + res.status + ")"), "err");
+      }
+    } catch (err) {
+      gMsg("Kasa bilgisayarına ulaşılamadı.", "err");
+    }
+    $("gBtn").disabled = false;
+  }
+
+  async function cikisYap() {
+    try { await apiFetch("api/cikis", { method: "POST" }); } catch (e) { }
+    location.reload();
+  }
+
+  function sfMsg(text, kind) {
+    $("sfMsg").textContent = text || "";
+    $("sfMsg").className = "msg " + (kind || "");
+  }
+
+  async function sifreDegistir(e) {
+    e.preventDefault();
+    const eski = $("sfEski").value, yeni = $("sfYeni").value;
+    if (!eski) { sfMsg("Mevcut şifreni yaz.", "err"); return; }
+    if (yeni.length < 8) { sfMsg("Yeni şifre en az 8 karakter olmalı.", "err"); return; }
+    if (yeni !== $("sfYeni2").value) { sfMsg("İki yeni şifre aynı değil.", "err"); return; }
+    sfMsg("Kaydediliyor…");
+    try {
+      const res = await apiFetch("api/sifrem", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ eski, yeni }) });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok && j.ok) {
+        $("sifreForm").reset();
+        $("sifreForm").hidden = true;
+        sfMsg("Şifre değişti.", "ok");
+      } else sfMsg(j.error || ("Değiştirilemedi (" + res.status + ")"), "err");
+    } catch (err) {
+      sfMsg("Kasa bilgisayarına ulaşılamadı.", "err");
+    }
+  }
+
+  const IZINLER = [["fiyat", "Fiyat değiştirme"], ["ekle", "Ürün ekleme ve düzenleme"], ["stok", "Stok girişi"], ["etiket", "Etiket basma"], ["icerik", "İçerik"], ["devir", "Dönem devri"]];
+  const ROL_AD = { yonetici: "Yönetici", kullanici: "Kullanıcı" };
+  let kulListe = [], kdEposta = "";
+
+  function yetkiKutulari(box, secili, rol) {
+    box.innerHTML = "";
+    IZINLER.forEach(([k, ad]) => {
+      const l = document.createElement("label");
+      l.className = "check";
+      l.innerHTML = '<input type="checkbox"> <span></span>';
+      l.querySelector("span").textContent = ad;
+      const c = l.querySelector("input");
+      c.value = k;
+      c.checked = rol === "yonetici" || (secili || []).includes(k);
+      c.disabled = rol === "yonetici";
+      box.appendChild(l);
+    });
+  }
+
+  function yetkiKilidi(box, rol) {
+    box.querySelectorAll("input").forEach(c => { c.disabled = rol === "yonetici"; if (rol === "yonetici") c.checked = true; });
+  }
+
+  const yetkiOku = box => [...box.querySelectorAll("input:checked")].map(c => c.value);
+
+  function kulMsg(text, kind) {
+    $("kulMsg").textContent = text || "";
+    $("kulMsg").className = "msg " + (kind || "");
+  }
+
+  async function kullanicilariYukle() {
+    try {
+      const res = await apiFetch("api/kullanicilar", { cache: "no-store" });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.ok) { kulMsg(j.error || ("Kullanıcılar okunamadı (" + res.status + ")"), "err"); return; }
+      kulListe = j.kullanicilar || [];
+      kullaniciCiz();
+    } catch (e) { kulMsg("Kullanıcılar okunamadı.", "err"); }
+  }
+
+  function kullaniciCiz() {
+    const ul = $("kulListe");
+    ul.innerHTML = "";
+    kulListe.forEach(u => {
+      const li = document.createElement("li");
+      li.innerHTML = '<div class="info"><b></b><span class="muted small kul-ep"></span><div class="kul-etiketler"></div></div><div class="kul-islem"></div>';
+      li.querySelector("b").textContent = u.ad;
+      li.querySelector(".kul-ep").textContent = u.eposta;
+      const tags = li.querySelector(".kul-etiketler");
+      const tag = (t, c) => { const sp = document.createElement("span"); sp.className = "kul-etiket " + (c || ""); sp.textContent = t; tags.appendChild(sp); };
+      tag(ROL_AD[u.rol] || u.rol, "rol");
+      if (!u.aktif) tag("Pasif", "pasif");
+      if (u.rol === "yonetici") tag("Tüm yetkiler");
+      else IZINLER.filter(([k]) => (u.yetkiler || []).includes(k)).forEach(([, ad]) => tag(ad));
+      const isl = li.querySelector(".kul-islem");
+      const dugme = (ad, fn, cls) => { const b = document.createElement("button"); b.type = "button"; b.className = "btn" + (cls ? " " + cls : ""); b.textContent = ad; b.onclick = fn; isl.appendChild(b); };
+      dugme("Düzenle", () => kulDuzenleAc(u));
+      dugme("Şifre sıfırla", () => kulSifreSifirla(u));
+      if (me && u.eposta !== me.eposta) dugme("Sil", () => kulSil(u), "danger");
+      ul.appendChild(li);
+    });
+  }
+
+  async function kulIstek(body) {
+    const res = await apiFetch("api/kullanicilar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const j = await res.json().catch(() => ({}));
+    return { ok: res.ok && j.ok, hata: j.error || ("İşlem yapılamadı (" + res.status + ")") };
+  }
+
+  async function kulEkle(e) {
+    e.preventDefault();
+    const ad = $("kfAd").value.trim(), eposta = $("kfEposta").value.trim(), sifre = $("kfSifre").value;
+    const msg = (t, k) => { $("kfMsg").textContent = t || ""; $("kfMsg").className = "msg " + (k || ""); };
+    if (!ad) { msg("Adı yaz.", "err"); return; }
+    if (!eposta.includes("@")) { msg("E-postayı doğru yaz.", "err"); return; }
+    if (sifre.length < 8) { msg("Şifre en az 8 karakter olmalı.", "err"); return; }
+    msg("Ekleniyor…");
+    try {
+      const r = await kulIstek({ islem: "ekle", eposta, ad, sifre, rol: $("kfRol").value, yetkiler: yetkiOku($("kfYetkiler")) });
+      if (!r.ok) { msg(r.hata, "err"); return; }
+      $("kulForm").reset();
+      yetkiKutulari($("kfYetkiler"), [], "kullanici");
+      msg(ad + " eklendi.", "ok");
+      kullanicilariYukle();
+    } catch (err) { msg("Kasa bilgisayarına ulaşılamadı.", "err"); }
+  }
+
+  function kulDuzenleAc(u) {
+    kdEposta = u.eposta;
+    $("kdBaslik").textContent = u.eposta;
+    $("kdAd").value = u.ad;
+    $("kdRol").value = u.rol;
+    $("kdAktif").checked = !!u.aktif;
+    yetkiKutulari($("kdYetkiler"), u.yetkiler, u.rol);
+    $("kdMsg").textContent = "";
+    $("kulDuzenle").showModal();
+  }
+
+  async function kulDuzenleKaydet(e) {
+    e.preventDefault();
+    $("kdMsg").textContent = "Kaydediliyor…";
+    $("kdMsg").className = "msg";
+    try {
+      const r = await kulIstek({ islem: "guncelle", eposta: kdEposta, ad: $("kdAd").value.trim(), rol: $("kdRol").value, yetkiler: yetkiOku($("kdYetkiler")), aktif: $("kdAktif").checked });
+      if (!r.ok) { $("kdMsg").textContent = r.hata; $("kdMsg").className = "msg err"; return; }
+      $("kulDuzenle").close();
+      kulMsg("Kullanıcı güncellendi.", "ok");
+      kullanicilariYukle();
+    } catch (err) { $("kdMsg").textContent = "Kasa bilgisayarına ulaşılamadı."; $("kdMsg").className = "msg err"; }
+  }
+
+  async function kulSifreSifirla(u) {
+    const sifre = prompt(u.ad + " için yeni şifre (en az 8 karakter):");
+    if (sifre === null) return;
+    if (sifre.length < 8) { kulMsg("Şifre en az 8 karakter olmalı.", "err"); return; }
+    try {
+      const r = await kulIstek({ islem: "sifre", eposta: u.eposta, sifre });
+      kulMsg(r.ok ? u.ad + " için şifre sıfırlandı, açık oturumları kapandı." : r.hata, r.ok ? "ok" : "err");
+    } catch (err) { kulMsg("Kasa bilgisayarına ulaşılamadı.", "err"); }
+  }
+
+  async function kulSil(u) {
+    if (!confirm(u.ad + " (" + u.eposta + ") hesabı silinsin mi?")) return;
+    try {
+      const r = await kulIstek({ islem: "sil", eposta: u.eposta });
+      kulMsg(r.ok ? u.ad + " silindi." : r.hata, r.ok ? "ok" : "err");
+      if (r.ok) kullanicilariYukle();
+    } catch (err) { kulMsg("Kasa bilgisayarına ulaşılamadı.", "err"); }
+  }
+
+  function hesapCiz() {
+    const g = !!(me && me.giris);
+    $("hesapCard").hidden = !g;
+    $("kullaniciCard").hidden = !(g && me.rol === "yonetici");
+    if (!g) return;
+    $("hesapAd").textContent = me.ad;
+    $("hesapEposta").textContent = me.eposta;
+    if (me.rol === "yonetici") kullanicilariYukle();
   }
 
   let priceSel = null;
   const priceLog = [];
 
-  const MENU = [["hesap", "🧮 Hesap", false], ["sorgu", "🔎 Sorgu", false], ["urunler", "📋 Ürünler", false], ["fiyat", "₺ Fiyat", true], ["ekle", "＋ Ekle", true], ["stok", "📦 Stok", true], ["icerik", "🥜 İçerik", true]];
+  const MENU = [["hesap", "🧮 Hesap", false], ["sorgu", "🔎 Sorgu", false], ["urunler", "📋 Ürünler", false], ["fiyat", "₺ Fiyat", ["fiyat", "etiket", "ekle"]], ["ekle", "＋ Ekle", ["ekle"]], ["stok", "📦 Stok", ["stok"]], ["icerik", "🥜 İçerik", ["icerik"]]];
+
+  const sekmeIzinli = yetki => !yetki || yetki.some(can);
 
   function menuUygula() {
     const gizli = store.get("gizliSekmeler", []);
     MENU.forEach(([k, , yetki]) => {
       const b = document.querySelector('.tabs button[data-tab="' + k + '"]');
-      if (b) b.hidden = (yetki && !canEditPrice) || gizli.includes(k);
+      if (b) b.hidden = !sekmeIzinli(yetki) || gizli.includes(k);
     });
     const aktif = document.querySelector(".tabs button.active");
     if (aktif && aktif.hidden) switchTab("ayarlar");
@@ -182,7 +435,7 @@
     box.innerHTML = "";
     const gizli = store.get("gizliSekmeler", []);
     MENU.forEach(([k, ad, yetki]) => {
-      if (yetki && !canEditPrice) return;
+      if (!sekmeIzinli(yetki)) return;
       const l = document.createElement("label");
       l.className = "check";
       l.innerHTML = '<input type="checkbox"> <span></span>';
@@ -203,8 +456,10 @@
     menuUygula();
     menuAyarKur();
     window.addEventListener("online", () => { if (!live) startLive(); });
-    $("guncelleCard").hidden = !live;
-    if (canEditPrice) loadLists();
+    $("guncelleCard").hidden = !live || !(me && me.rol === "yonetici");
+    $("devirBox").hidden = !can("devir");
+    hesapCiz();
+    if (can("ekle")) loadLists();
   }
 
   async function appGuncelle() {
@@ -212,7 +467,7 @@
     $("guncelleMsg").textContent = "Güncelleniyor, bekleyin…";
     $("guncelleMsg").className = "msg";
     try {
-      const res = await fetch("api/guncelle", { method: "POST" });
+      const res = await apiFetch("api/guncelle", { method: "POST" });
       const j = await res.json().catch(() => ({}));
       if (res.ok && j.ok) {
         $("guncelleMsg").textContent = "Güncellendi, uygulama yenileniyor…";
@@ -259,8 +514,9 @@
     $("fInfo").textContent = "Yükleniyor…";
     $("fOld").textContent = "";
     $("fNew").value = "";
-    $("fPin").value = pinCache && Date.now() - pinAt < 10 * 60000 ? pinCache : "";
     $("fSave").disabled = true;
+    $("fSave").hidden = !can("fiyat");
+    $("fYeniGrid").hidden = !can("fiyat");
     $("fSuggest").innerHTML = "";
     $("fSearch").value = "";
     $("fUnitsBox").hidden = true;
@@ -272,7 +528,7 @@
     $("fEtiketSon").hidden = true;
     fMsg("");
     try {
-      const res = await fetch("api/birimler?ind=" + encodeURIComponent(p.birimind), { cache: "no-store" });
+      const res = await apiFetch("api/birimler?ind=" + encodeURIComponent(p.birimind), { cache: "no-store" });
       const j = await res.json();
       if (!res.ok || !j.ok || !j.birimler || !j.birimler.length) throw new Error(j.error || "bulunamadı");
       if (priceSel !== p) return;
@@ -297,12 +553,12 @@
           }
           ul.appendChild(li);
         });
-        $("fUnitsBox").hidden = false;
+        $("fUnitsBox").hidden = !can("fiyat");
       }
       $("fSave").disabled = false;
       fillEtiketUnits();
       birimFormKur();
-      loadOzel(j.stok, p);
+      if (can("ekle")) loadOzel(j.stok, p);
       const tk = trzKod(j.kod);
       if (tk) showTerazi(p, tk);
       setTimeout(() => $("fNew").focus(), 50);
@@ -326,7 +582,7 @@
     $("bAgirlik").value = ""; $("bBarkod").value = ""; $("bFiyat").value = "";
     delete $("bFiyat").dataset.touched;
     bMsg("");
-    $("fBirimBox").hidden = !unitData;
+    $("fBirimBox").hidden = !unitData || !can("ekle");
   }
 
   function birimFiyatHesapla() {
@@ -339,7 +595,6 @@
   async function birimEkle() {
     if (!unitData || !priceSel) return;
     const num = v => parseFloat(String(v).replace(/\./g, "").replace(",", "."));
-    const pin = String($("fPin").value).trim();
     const birim = $("bBirim").value;
     const agirlik = parseFloat(String($("bAgirlik").value).replace(",", ".")) || 0;
     const barkod = Scale.normCode($("bBarkod").value);
@@ -348,20 +603,17 @@
     if (!barkod) { bMsg("Barkodu yaz.", "err"); return; }
     if (byBarcode.get(barkod)) { bMsg("Bu barkod zaten kayıtlı: " + byBarcode.get(barkod).ad, "err"); return; }
     if (!(fiyat > 0)) { bMsg("Satış fiyatını yaz.", "err"); return; }
-    if (!/^\d{4,8}$/.test(pin)) { bMsg("Yukarıya PIN yaz (4-8 rakam).", "err"); return; }
     $("bEkle").disabled = true;
     bMsg("Ekleniyor…");
     try {
-      const res = await fetch("api/birim", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ stok: unitData.stok, birim, agirlik, barkod, fiyat: round2(fiyat), pin }) });
+      const res = await apiFetch("api/birim", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ stok: unitData.stok, birim, agirlik, barkod, fiyat: round2(fiyat) }) });
       const j = await res.json().catch(() => ({}));
       if (res.ok && j.ok) {
-        pinCache = pin; pinAt = Date.now();
         const p = priceSel;
         await syncLive();
         await selectForPrice(p);
         fMsg(birim + (agirlik > 0 ? " " + kgFmt(agirlik) + " kg" : "") + " birimi eklendi (" + barkod + ", " + tl(round2(fiyat)) + ").", "ok");
       } else {
-        if (res.status === 401) { pinCache = ""; $("fPin").value = ""; }
         bMsg(j.error || ("Eklenemedi (" + res.status + ")"), "err");
       }
     } catch (e) {
@@ -389,12 +641,12 @@
     eCanvas = null;
     $("eResim").hidden = true;
     eMsg("");
-    $("fEtiketBox").hidden = !sel.options.length;
+    $("fEtiketBox").hidden = !sel.options.length || !can("etiket");
   }
 
   async function etiketHazirla() {
     if (!window.Etiket) throw new Error("etiket çizici yüklenmedi");
-    const res = await fetch("api/etiket?ind=" + encodeURIComponent($("eBirim").value), { cache: "no-store" });
+    const res = await apiFetch("api/etiket?ind=" + encodeURIComponent($("eBirim").value), { cache: "no-store" });
     const j = await res.json().catch(() => ({}));
     if (!res.ok || !j.ok) throw new Error(j.error || ("HTTP " + res.status));
     eVeri = j;
@@ -416,7 +668,7 @@
     try {
       await etiketHazirla();
       const blob = await new Promise(r => eCanvas.toBlob(r, "image/png"));
-      const res = await fetch("api/etiket?kopya=" + k + "&ad=" + encodeURIComponent(eVeri.ad || ""), { method: "POST", headers: { "Content-Type": "image/png" }, body: blob });
+      const res = await apiFetch("api/etiket?kopya=" + k + "&ad=" + encodeURIComponent(eVeri.ad || ""), { method: "POST", headers: { "Content-Type": "image/png" }, body: blob });
       const j = await res.json().catch(() => ({}));
       if (res.ok && j.ok) eMsg(k + " etiket yazıcıya gönderildi (" + j.yazici + ").", "ok");
       else eMsg(j.error || ("Yazdırılamadı (" + res.status + ")"), "err");
@@ -452,9 +704,7 @@
     const main = unitData.birimler[0];
     const bos = v => !String(v || "").trim();
     const yeni = bos($("fNew").value) ? main.fiyat : num($("fNew").value);
-    const pin = String($("fPin").value).trim();
     if (!(yeni > 0)) { fMsg("Yeni fiyatı doğru yaz.", "err"); return; }
-    if (!/^\d{4,8}$/.test(pin)) { fMsg("PIN 4-8 rakam olmalı.", "err"); return; }
     const changes = [{ ind: main.ind, eski: main.fiyat, yeni: round2(yeni) }];
     for (const u of unitData.birimler.slice(1)) {
       const inp = $("fu-" + u.ind);
@@ -473,14 +723,13 @@
     $("fSave").disabled = true;
     fMsg("Kaydediliyor…");
     try {
-      const res = await fetch("api/fiyat", {
+      const res = await apiFetch("api/fiyat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ stok: unitData.stok, ad: unitData.ad, pin, degisiklikler: real })
+        body: JSON.stringify({ stok: unitData.stok, ad: unitData.ad, degisiklikler: real })
       });
       const j = await res.json().catch(() => ({}));
       if (res.ok && j.ok) {
-        pinCache = pin; pinAt = Date.now();
         clData = null;
         real.forEach(c => { const pr = products.find(x => x.birimind === c.ind); if (pr) pr.fiyat = c.yeni; });
         priceLog.unshift({ ad: unitData.ad, eski: main.fiyat, yeni: round2(yeni), birimSayisi: real.length, at: new Date() });
@@ -501,7 +750,6 @@
         syncLive();
         return;
       }
-      if (res.status === 401) { pinCache = ""; $("fPin").value = ""; }
       if (res.status === 409) syncLive();
       fMsg(j.error || ("Kaydedilemedi (" + res.status + ")"), "err");
     } catch (e) {
@@ -514,7 +762,7 @@
 
   async function loadCL(force) {
     if (!force && clData && Date.now() - clAt < 60000) return clData;
-    const res = await fetch("api/terazi", { cache: "no-store" });
+    const res = await apiFetch("api/terazi", { cache: "no-store" });
     const j = await res.json().catch(() => ({}));
     if (!res.ok || !j.ok) throw new Error(j.error || ("HTTP " + res.status));
     clData = j.urunler || [];
@@ -611,7 +859,7 @@
   async function loadIcerikler() {
     iMsg("İçerikler okunuyor…");
     try {
-      const res = await fetch("api/icerik", { cache: "no-store" });
+      const res = await apiFetch("api/icerik", { cache: "no-store" });
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j.ok) throw new Error(j.error || ("HTTP " + res.status));
       icerikler = j.icerikler || [];
@@ -703,7 +951,6 @@
     ["kj", "kcal"].concat(Icerik.BESIN.map(b => b[0])).forEach(k => { $("iB-" + k).value = v.besin[k] || ""; });
     $("iUyari").hidden = !v.taninmayan.length;
     $("iUyari").textContent = v.taninmayan.length ? "Şu satırlar tanınmadı, kaydedersen silinir: " + v.taninmayan.map(t => t.replace(/~2/g, "")).join(" / ") : "";
-    $("iPin").value = pinCache && Date.now() - pinAt < 10 * 60000 ? pinCache : "";
     iKayitMsg("");
     $("iCard").hidden = false;
     icerikOnizle();
@@ -719,16 +966,13 @@
   async function icerikKaydet() {
     const v = icerikDegerleri();
     if (!v.icindekiler.trim()) { iKayitMsg("İçindekileri yaz.", "err"); return; }
-    const pin = String($("iPin").value).trim();
-    if (!/^\d{4,8}$/.test(pin)) { iKayitMsg("PIN 4-8 rakam olmalı.", "err"); return; }
     const metin = Icerik.olustur(v);
     $("iKaydet").disabled = true;
     iKayitMsg("Kaydediliyor…");
     try {
-      const res = await fetch("api/icerik", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kod: icerikKod, metin, pin, gonder: $("iGonder").checked }) });
+      const res = await apiFetch("api/icerik", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kod: icerikKod, metin, gonder: $("iGonder").checked }) });
       const j = await res.json().catch(() => ({}));
       if (res.ok && j.ok) {
-        pinCache = pin; pinAt = Date.now();
         const eski = icerikler && icerikler.find(x => x.kod === icerikKod);
         if (eski) eski.metin = metin; else if (icerikler) icerikler.push({ kod: icerikKod, metin });
         icerikYeni = false;
@@ -737,7 +981,6 @@
         const tm = j.teraziMesaj || "";
         iKayitMsg("CL'ye kaydedildi (kod " + icerikKod + "). " + (tm || "Terazilere gönderilmedi; göndermek için CL Works'te Gönder'e bas."), /ulasilamadi|Ulasilamadi/.test(tm) ? "err" : "ok");
       } else {
-        if (res.status === 401) { pinCache = ""; $("iPin").value = ""; }
         iKayitMsg(j.error || ("Kaydedilemedi (" + res.status + ")"), "err");
       }
     } catch (e) {
@@ -794,7 +1037,7 @@
     if (!p || !p.birimind) { sMsg("Bu ürün kasada kayıtlı değil.", "err"); return; }
     sMsg("Ürün bilgisi alınıyor…");
     try {
-      const res = await fetch("api/stok?birim=" + encodeURIComponent(p.birimind), { cache: "no-store" });
+      const res = await apiFetch("api/stok?birim=" + encodeURIComponent(p.birimind), { cache: "no-store" });
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j.ok) throw new Error(j.error || ("HTTP " + res.status));
       stokSecili = j;
@@ -803,7 +1046,6 @@
       $("sdBilgi").textContent = [j.kod, "Şu an: " + miktarYaz(Number(j.kalan) || 0) + " " + (j.birim || "")].filter(Boolean).join(" · ");
       $("sdAdet").value = "";
       $("sdCarpan").value = "1";
-      $("sdPin").value = pinCache && Date.now() - pinAt < 10 * 60000 ? pinCache : "";
       sdMsg("");
       $("sdEkle").disabled = false;
       stokHesap();
@@ -817,17 +1059,14 @@
   async function stokEkle() {
     if (!stokSecili) return;
     const t = stokHesap();
-    const pin = String($("sdPin").value).trim();
     if (!(t > 0)) { sdMsg("Adet ve çarpanı yaz.", "err"); return; }
     if (t > 100000) { sdMsg("Miktar çok büyük, adet ve çarpanı kontrol et.", "err"); return; }
-    if (!/^\d{4,8}$/.test(pin)) { sdMsg("PIN 4-8 rakam olmalı.", "err"); return; }
     $("sdEkle").disabled = true;
     sdMsg("Ekleniyor…");
     try {
-      const res = await fetch("api/stok", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ stok: stokSecili.stok, miktar: t, pin }) });
+      const res = await apiFetch("api/stok", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ stok: stokSecili.stok, miktar: t }) });
       const j = await res.json().catch(() => ({}));
       if (res.ok && j.ok) {
-        pinCache = pin; pinAt = Date.now();
         $("stokDialog").close();
         stokLog.unshift({ ad: stokSecili.ad, miktar: t, birim: stokSecili.birim, kalan: j.kalan, belge: j.belge, at: new Date() });
         stokLogCiz();
@@ -835,7 +1074,6 @@
         beep(true);
         return;
       }
-      if (res.status === 401) { pinCache = ""; $("sdPin").value = ""; }
       sdMsg(j.error || ("Eklenemedi (" + res.status + ")"), "err");
     } catch (e) {
       sdMsg("Kasa bilgisayarına ulaşılamadı.", "err");
@@ -911,7 +1149,7 @@
     if (donemListesi) return;
     dvMsg("Dönemler okunuyor…");
     try {
-      const res = await fetch("api/devir", { cache: "no-store" });
+      const res = await apiFetch("api/devir", { cache: "no-store" });
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j.ok) throw new Error(j.error || ("HTTP " + res.status));
       donemListesi = j.donemler || [];
@@ -938,7 +1176,7 @@
     if (k > h) { dvMsg("Kaynak dönem hedef dönemden önce olmalı.", "err"); return; }
     dvMsg("Hesaplanıyor…");
     try {
-      const res = await fetch("api/devir?kaynak=" + encodeURIComponent(k) + "&hedef=" + encodeURIComponent(h), { cache: "no-store" });
+      const res = await apiFetch("api/devir?kaynak=" + encodeURIComponent(k) + "&hedef=" + encodeURIComponent(h), { cache: "no-store" });
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j.ok) throw new Error(j.error || ("HTTP " + res.status));
       devirVeri = j;
@@ -955,7 +1193,6 @@
         ul.appendChild(li);
       });
       if (j.urun > j.satirlar.length) { const li = document.createElement("li"); li.textContent = "… ve " + (j.urun - j.satirlar.length) + " ürün daha"; ul.appendChild(li); }
-      $("dvPin").value = pinCache && Date.now() - pinAt < 10 * 60000 ? pinCache : "";
       $("dvDevret").disabled = j.onceki > 0 || j.urun === 0;
       if (j.onceki > 0) dvMsg("Bu dönemden devir daha önce yapılmış. İkinci kez yapılmaz.", "err");
       else if (j.urun === 0) dvMsg("Kaynak dönemde kalanı olan ürün yok.", "err");
@@ -967,22 +1204,18 @@
 
   async function devirYap() {
     if (!devirVeri) return;
-    const pin = String($("dvPin").value).trim();
-    if (!/^\d{4,8}$/.test(pin)) { dvMsg("PIN 4-8 rakam olmalı.", "err"); return; }
     if (!confirm(devirVeri.urun + " ürünün kalanı " + devirVeri.kaynak.slice(5) + " döneminden " + devirVeri.hedef.slice(5) + " dönemine aktarılacak. Bu işlem bir kez yapılır. Devam edilsin mi?")) return;
     $("dvDevret").disabled = true;
     dvMsg("Devrediliyor, bu biraz sürebilir…");
     try {
-      const res = await fetch("api/devir", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kaynak: devirVeri.kaynak, hedef: devirVeri.hedef, pin }) });
+      const res = await apiFetch("api/devir", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kaynak: devirVeri.kaynak, hedef: devirVeri.hedef }) });
       const j = await res.json().catch(() => ({}));
       if (res.ok && j.ok) {
-        pinCache = pin; pinAt = Date.now();
         dvMsg("Devir tamam: fiş " + j.belge + ", " + j.adet + " ürün, toplam " + miktarYaz(j.toplam) + " birim.", "ok");
         $("dvSonuc").hidden = true;
         donemListesi = null;
         return;
       }
-      if (res.status === 401) { pinCache = ""; $("dvPin").value = ""; }
       dvMsg(j.error || ("Devir yapılamadı (" + res.status + ")"), "err");
     } catch (e) {
       dvMsg("Kasa bilgisayarına ulaşılamadı. Devrin yapılıp yapılmadığını Önizle ile kontrol et.", "err");
@@ -1033,7 +1266,7 @@
 
   async function loadLists() {
     try {
-      const res = await fetch("api/listeler", { cache: "no-store" });
+      const res = await apiFetch("api/listeler", { cache: "no-store" });
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j || !j.ok) { aMsg("Seçim listeleri okunamadı: " + (j.error || ("HTTP " + res.status)), "err"); return; }
       lists = j;
@@ -1089,7 +1322,7 @@
     ozelEski = null; ozelStok = 0;
     okMsg("");
     try {
-      const res = await fetch("api/ozel?stok=" + encodeURIComponent(stok), { cache: "no-store" });
+      const res = await apiFetch("api/ozel?stok=" + encodeURIComponent(stok), { cache: "no-store" });
       const j = await res.json().catch(() => ({}));
       if (priceSel !== p) return;
       if (!res.ok || !j.ok) { $("fOzelBox").hidden = false; okMsg("Özel kodlar okunamadı: " + (j.error || ("HTTP " + res.status)), "err"); return; }
@@ -1105,18 +1338,15 @@
 
   async function saveOzel() {
     if (!ozelEski || !ozelStok) return;
-    const pin = String($("fPin").value).trim();
-    if (!/^\d{4,8}$/.test(pin)) { okMsg("Yukarıya PIN yaz (4-8 rakam).", "err"); return; }
     const degisen = {};
     OZEL.forEach(n => { const v = $("fOk" + n).value.trim(); if (v !== (ozelEski[n] || "")) degisen[n] = v; });
     if (!Object.keys(degisen).length) { okMsg("Değişiklik yok.", "err"); return; }
     $("fOkKaydet").disabled = true;
     okMsg("Kaydediliyor…");
     try {
-      const res = await fetch("api/ozel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ stok: ozelStok, pin, ozel: degisen }) });
+      const res = await apiFetch("api/ozel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ stok: ozelStok, ozel: degisen }) });
       const j = await res.json().catch(() => ({}));
       if (res.ok && j.ok) {
-        pinCache = pin; pinAt = Date.now();
         Object.assign(ozelEski, degisen);
         okMsg("Özel kodlar kaydedildi (" + Object.keys(degisen).length + " alan).", "ok");
         Object.entries(degisen).forEach(([n, v]) => {
@@ -1127,7 +1357,6 @@
           dl.insertBefore(o, dl.firstChild);
         });
       } else {
-        if (res.status === 401) { pinCache = ""; $("fPin").value = ""; }
         okMsg(j.error || ("Kaydedilemedi (" + res.status + ")"), "err");
       }
     } catch (e) {
@@ -1279,7 +1508,6 @@
     if ([...$("aBirim").options].some(o => o.value === "ADET")) $("aBirim").value = "ADET";
     if ([...$("aFiyatAdi").options].some(o => o.value === "FIYAT")) $("aFiyatAdi").value = "FIYAT";
     if ($("aKdv").options.length) $("aKdv").selectedIndex = 0;
-    $("aPin").value = pinCache && Date.now() - pinAt < 10 * 60000 ? pinCache : "";
     kodTouched = false;
     $("aStd").textContent = "";
     $("aSave").disabled = false;
@@ -1316,14 +1544,12 @@
       alisFiyati: numIn("aAlis"),
       alisKdv: Math.round(numIn("aAlisKdv")),
       uretici: $("aUretici").value.trim(),
-      ozel: Object.fromEntries(OZEL.map(n => [String(n), $("aOk" + n).value.trim()]).filter(x => x[1])),
-      pin: $("aPin").value.trim()
+      ozel: Object.fromEntries(OZEL.map(n => [String(n), $("aOk" + n).value.trim()]).filter(x => x[1]))
     };
     if (!data.ad) { aMsg("Stok adını yaz.", "err"); return; }
     if (!data.stokKodu) { aMsg("Stok kodunu yaz.", "err"); return; }
     if (!(data.fiyat1 > 0)) { aMsg("1. satış fiyatını yaz.", "err"); return; }
     if (data.barkod && byBarcode.get(data.barkod)) { aMsg("Bu barkod zaten kayıtlı: " + byBarcode.get(data.barkod).ad, "err"); return; }
-    if (!/^\d{4,8}$/.test(data.pin)) { aMsg("PIN 4-8 rakam olmalı.", "err"); return; }
     if (data.terazi) {
       const int = id => { const v = $(id).value.trim(); return /^\d+$/.test(v) ? parseInt(v, 10) : -1; };
       data.cl = {
@@ -1349,10 +1575,9 @@
     $("aSave").disabled = true;
     aMsg("Kaydediliyor…");
     try {
-      const res = await fetch("api/urun", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+      const res = await apiFetch("api/urun", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
       const j = await res.json().catch(() => ({}));
       if (res.ok && j.ok) {
-        pinCache = data.pin; pinAt = Date.now();
         addLog.unshift({ ad: data.ad, barkod: data.barkod, birim: data.birim, fiyat: data.fiyat1, at: new Date() });
         renderAddLog();
         resetAddForm();
@@ -1363,7 +1588,6 @@
         loadLists();
         return;
       }
-      if (res.status === 401) { pinCache = ""; $("aPin").value = ""; }
       if (j.oneri) { clData = null; checkClPlu(true); }
       aMsg(j.error || ("Eklenemedi (" + res.status + ")"), "err");
     } catch (err) {
@@ -1403,7 +1627,7 @@
       $("sorguAlt").textContent = code;
       $("sorguDuzenle").hidden = true;
       sorguKod = code;
-      $("sorguEkle").hidden = !canEditPrice || !!(r && r.scale);
+      $("sorguEkle").hidden = !can("ekle") || !!(r && r.scale);
     } else {
       beep(true);
       const p = r.product;
@@ -1419,7 +1643,7 @@
         alt = "Bu etiket: " + kgFmt(kg) + " kg = " + tl(amount);
       }
       $("sorguAlt").textContent = alt;
-      $("sorguDuzenle").hidden = !(canEditPrice && p.birimind);
+      $("sorguDuzenle").hidden = !(fiyatSekmesi() && p.birimind);
     }
     const bar = $("sorguSure");
     bar.style.animation = "none";
@@ -1465,7 +1689,7 @@
 
   async function alanAdiKontrol() {
     try {
-      const res = await fetch("api/alanadi", { cache: "no-store" });
+      const res = await apiFetch("api/alanadi", { cache: "no-store" });
       const j = await res.json();
       if (!j || !j.ok || !j.alan || !(j.kalanGun >= 0) || j.kalanGun > 30) return;
       const bugun = new Date().toISOString().slice(0, 10);
@@ -1478,10 +1702,17 @@
 
   async function startLive() {
     clearTimeout(tekrarTimer);
+    if (canliOrtam() && !(me && me.giris)) {
+      const r = await loadRights();
+      if (r === "giris") { girisGoster(); return false; }
+    }
     if (await syncLive()) {
       if (!liveHazir) {
+        if (canliOrtam() && !(me && me.giris)) {
+          await loadRights();
+          if (!(me && me.giris)) { tekrarTimer = setTimeout(startLive, 20000); return false; }
+        }
         liveHazir = true;
-        await loadRights();
         updatePriceTab();
         alanAdiKontrol();
         renderInfo();
@@ -1989,8 +2220,8 @@
     if (name === "urunler") renderList();
     if (name === "stok") stokTeraziListe();
     if (name === "sorgu") { scanMode = "sorgu"; startScan(); window.scrollTo(0, 0); }
-    if (name === "icerik" && canEditPrice && !icerikler) loadIcerikler();
-    if (name === "ekle" && canEditPrice && (!$("aBirim").options.length || !$("aKdv").options.length)) loadLists();
+    if (name === "icerik" && can("icerik") && !icerikler) loadIcerikler();
+    if (name === "ekle" && can("ekle") && (!$("aBirim").options.length || !$("aKdv").options.length)) loadLists();
   }
 
   const FIELDS = [
@@ -2200,8 +2431,19 @@
     $("sdAdet").oninput = stokHesap;
     $("sdCarpan").oninput = stokHesap;
     $("sdEkle").onclick = stokEkle;
+    $("girisForm").onsubmit = girisGonder;
+    $("cikisBtn").onclick = cikisYap;
+    $("sifreAc").onclick = () => { $("sifreForm").hidden = !$("sifreForm").hidden; sfMsg(""); };
+    $("sfVazgec").onclick = () => { $("sifreForm").reset(); $("sifreForm").hidden = true; sfMsg(""); };
+    $("sifreForm").onsubmit = sifreDegistir;
+    $("kulForm").onsubmit = kulEkle;
+    $("kdForm").onsubmit = kulDuzenleKaydet;
+    $("kdVazgec").onclick = () => $("kulDuzenle").close();
+    $("kfRol").onchange = () => yetkiKilidi($("kfYetkiler"), $("kfRol").value);
+    $("kdRol").onchange = () => yetkiKilidi($("kdYetkiler"), $("kdRol").value);
+    yetkiKutulari($("kfYetkiler"), [], "kullanici");
     $("sdVazgec").onclick = () => $("stokDialog").close();
-    $("sdPin").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); stokEkle(); } });
+    ["sdAdet", "sdCarpan"].forEach(id => $(id).addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); stokEkle(); } }));
     $("iForm").onsubmit = e => { e.preventDefault(); icerikAra($("iAra").value); };
     $("iAra").oninput = () => { if (!/^\d+$/.test($("iAra").value.trim())) icerikAra($("iAra").value); };
     $("iYeni").onclick = icerikYeniAc;
