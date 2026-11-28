@@ -104,6 +104,13 @@
     <ul class="list" id="productList"></ul>
   </section>
 
+  <section id="tab-terazi" class="tab">
+    <input id="tzAra" placeholder="PLU ya da ürün adı ara" autocomplete="off">
+    <div class="row"><span class="muted small" id="tzSayi"></span><button class="btn" id="tzYenile" type="button">Yenile</button></div>
+    <div class="msg" id="tzMsg"></div>
+    <ul class="list" id="tzList"></ul>
+  </section>
+
   <section id="tab-fiyat" class="tab">
     <div class="row">
       <button class="btn primary big" id="fScan" type="button">📷 Fiyatı değişecek ürünü okut</button>
@@ -471,6 +478,7 @@
   <button data-tab="hesap" class="active" type="button">🧮<span>Hesap</span></button>
   <button data-tab="sorgu" type="button">🔎<span>Sorgu</span></button>
   <button data-tab="urunler" type="button">📋<span>Ürünler</span></button>
+  <button data-tab="terazi" type="button">⚖️<span>Terazi</span></button>
   <button data-tab="fiyat" id="tabFiyatBtn" type="button" hidden>₺<span>Fiyat</span></button>
   <button data-tab="ekle" id="tabEkleBtn" type="button" hidden>＋<span>Ekle</span></button>
   <button data-tab="stok" id="tabStokBtn" type="button" hidden>📦<span>Stok</span></button>

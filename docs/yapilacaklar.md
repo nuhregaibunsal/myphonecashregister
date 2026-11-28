@@ -15,6 +15,7 @@
 - [ ] CL'de aynı ürün kodlu ve fiyatı farklı ürünlerin temizliği (126 kod, 108'inde fiyat farklı; PLU 1000 ve 9994-9999 gibi kopyalar).
 
 ## Tamamlandı
+- [x] ⚖️ Terazi sekmesi: sadece terazi ürünleri; solda CL PLU (1000 altı, aynı koddakiler alt alta), sağda ad ve fiyat; dokununca Fiyat ekranı (dükkanda denenecek)
 - [x] Öğretici: normal kullanıcıya ilk girişte (telefon başına bir kez) adım adım tanıtım; sadece yetkili olduğu sekmeler anlatılır; Ayarlar → Hesabım → Öğreticiyi başlat ile herkes tekrar açabilir
 - [x] Aramalarda terazi ürünleri (TRZ-) en üstte: tam barkod/PLU/kod eşleşmesi önce, sonra adı aranan kelimeyle başlayan TRZ'ler, diğer TRZ'ler, sonra diğer ürünler
 - [x] Cloudflare Access kaldırıldı; giriş uygulamanın kendi e-posta + şifresiyle

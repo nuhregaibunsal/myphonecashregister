@@ -141,6 +141,7 @@
       baglantiGoster();
       await saveProducts();
       renderInfo();
+      if ($("tab-terazi").classList.contains("active")) renderTerazi(true);
       return true;
     } catch (e) {
       if (e && e.tip === "giris") {
@@ -416,7 +417,7 @@
   let priceSel = null;
   const priceLog = [];
 
-  const MENU = [["hesap", "🧮 Hesap", false], ["sorgu", "🔎 Sorgu", false], ["urunler", "📋 Ürünler", false], ["fiyat", "₺ Fiyat", ["fiyat", "etiket", "ekle"]], ["ekle", "＋ Ekle", ["ekle"]], ["stok", "📦 Stok", ["stok"]], ["icerik", "🥜 İçerik", ["icerik"]]];
+  const MENU = [["hesap", "🧮 Hesap", false], ["sorgu", "🔎 Sorgu", false], ["urunler", "📋 Ürünler", false], ["terazi", "⚖️ Terazi", false], ["fiyat", "₺ Fiyat", ["fiyat", "etiket", "ekle"]], ["ekle", "＋ Ekle", ["ekle"]], ["stok", "📦 Stok", ["stok"]], ["icerik", "🥜 İçerik", ["icerik"]]];
 
   const sekmeIzinli = yetki => !yetki || yetki.some(can);
 
@@ -469,6 +470,7 @@
       { hedef: ".totalbar", baslik: "Toplam tutar", metin: "Sepetin toplamı burada yazar. Temizle düğmesi sepeti boşaltır." },
       { hedef: nav("sorgu"), baslik: "Fiyat Sorgu", metin: "Kamera açık kalır. Okuttuğun ürünün fiyatı büyük yazılır. Müşteriye göstermek için çok iyidir." },
       { hedef: nav("urunler"), baslik: "Ürünler", metin: "Bütün ürünlerin listesi burada. Arayıp ürüne dokunursan sepete eklenir." },
+      { hedef: nav("terazi"), baslik: "Terazi", metin: "Terazi ürünleri burada. Solda terazideki PLU numarası, yanında adı ve fiyatı yazar." + (fiyatSekmesi() ? " Ürüne dokunursan fiyatını değiştirebilirsin." : "") },
       { hedef: nav("fiyat"), baslik: "Fiyat", metin: fiyatMetin },
       { hedef: nav("ekle"), baslik: "Ekle", metin: "Listede olmayan yeni bir ürünü buradan eklersin." },
       { hedef: nav("stok"), baslik: "Stok", metin: "Dükkana gelen malın adedini buradan yazarsın. Stok kendiliğinden artar." },
@@ -2393,11 +2395,77 @@
     res.forEach(p => ul.appendChild(productLi(p, x => { addProduct(x); switchTab("hesap"); })));
   }
 
+  let tzHata = "", tzYukleniyor = false;
+
+  function tzSatirlar() {
+    const gor = new Set();
+    const urunler = [];
+    products.forEach(p => {
+      if (!/^TRZ-/i.test(p.kod || "") || !p.birimind || gor.has(p.kod)) return;
+      gor.add(p.kod);
+      urunler.push(p);
+    });
+    const cl = clData || [];
+    return urunler.map(p => {
+      const n = trzKod(p.kod);
+      const plular = cl.filter(x => x.kod === n && x.plu < 1000).map(x => x.plu).sort((a, b) => a - b);
+      return { p, plular };
+    }).sort((a, b) => {
+      const x = a.plular.length ? a.plular[0] : Infinity;
+      const y = b.plular.length ? b.plular[0] : Infinity;
+      if (x !== y) return x < y ? -1 : 1;
+      return a.p.ad.localeCompare(b.p.ad, "tr-TR");
+    });
+  }
+
+  function tzCiz() {
+    const ul = $("tzList");
+    ul.innerHTML = "";
+    const q = lower($("tzAra").value.trim());
+    const tum = tzSatirlar();
+    const sonuc = tum.filter(s => !q || lower(s.p.ad).includes(q) || (/^\d+$/.test(q) && s.plular.some(n => String(n).startsWith(q))));
+    $("tzSayi").textContent = tzYukleniyor ? "Okunuyor…" : sonuc.length + " ürün";
+    const tikla = fiyatSekmesi();
+    sonuc.slice(0, 400).forEach(s => {
+      const li = document.createElement("li");
+      li.className = "tz-satir";
+      li.innerHTML = '<div class="tz-plu"></div><div class="info"><b></b></div><strong></strong>';
+      const plu = li.querySelector(".tz-plu");
+      if (s.plular.length) s.plular.forEach(n => { const d = document.createElement("div"); d.textContent = n; plu.appendChild(d); });
+      else plu.textContent = "—";
+      li.querySelector("b").textContent = s.p.ad;
+      li.querySelector("strong").textContent = tl(s.p.fiyat);
+      if (tikla) li.onclick = () => { switchTab("fiyat"); selectForPrice(s.p); };
+      else li.style.cursor = "default";
+      ul.appendChild(li);
+    });
+    if (!tum.length) ul.innerHTML = '<li class="muted">Terazi ürünü bulunamadı.</li>';
+  }
+
+  async function renderTerazi(onbellek) {
+    tzCiz();
+    if (tzYukleniyor) return;
+    tzYukleniyor = true;
+    $("tzSayi").textContent = "Okunuyor…";
+    try {
+      await loadCL(!onbellek);
+      tzHata = "";
+    } catch (e) {
+      tzHata = (e && e.message) || "bilinmeyen hata";
+    }
+    tzYukleniyor = false;
+    const m = $("tzMsg");
+    m.textContent = tzHata ? "Terazi PLU'ları okunamadı: " + tzHata : "";
+    m.className = tzHata ? "msg err" : "msg";
+    tzCiz();
+  }
+
   function switchTab(name) {
     document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.id === "tab-" + name));
     document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
     stopScan();
     if (name === "urunler") renderList();
+    if (name === "terazi") renderTerazi(true);
     if (name === "stok") stokTeraziListe();
     if (name === "sorgu") { scanMode = "sorgu"; startScan(); window.scrollTo(0, 0); }
     if (name === "icerik" && can("icerik") && !icerikler) loadIcerikler();
@@ -2677,6 +2745,8 @@
     $("manualInput").oninput = renderSuggest;
     $("clearBasket").onclick = () => { if (!basket.length || confirm("Hesap temizlensin mi?")) { basket = []; saveBasket(); $("lastScan").hidden = true; } };
     $("searchInput").oninput = renderList;
+    $("tzAra").oninput = tzCiz;
+    $("tzYenile").onclick = () => renderTerazi(false);
     $("fileInput").onchange = e => { if (e.target.files[0]) handleFile(e.target.files[0]); };
     $("saveImport").onclick = saveImport;
     Object.keys(SFIELDS).forEach(id => $(id).addEventListener("input", testScale));
