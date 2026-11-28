@@ -4,17 +4,18 @@
 ### Dükkanda denenecek (yazıldı)
 - [ ] Dönem devri (Stok → Dönem devri): kaynak dönemde SUM(DEPOENVANTER.ENVANTER) > 0 olan ürünler hedef döneme tek devir giriş fişiyle (ALTBELGENO = DEVIR-<kaynak>, ikinci kez engellenir). Şimdilik sadece Önizle denenecek; Devret yılbaşında, Vega yeni dönemi açtıktan ve izin.sql yeniden çalıştırıldıktan sonra.
 - [ ] Fiyat sorguda bulunamayan ürün için ＋ Ekle düğmesi.
-- [ ] Normal kullanıcı hesabı (abinin hesabı, iPhone Safari): giriş, işaretlenen izinler dışındaki sekmelerin gizlenmesi, Ana Ekrana Ekle.
 
 ### Yapılacak
 - [x] Kullanıcı girişi ve roller (ilk yönetici kuruldu, giriş çalışıyor): kayıt ol yok, hesapları yönetici açar. PIN kaldırıldı. Roller: Yönetici (her şey) ve Kullanıcı (işaretlenen izinler: fiyat değiştirme, ürün ekleme/düzenleme, stok girişi, etiket, içerik, dönem devri). Yetkiler sunucuda denetlenir. Hesap açma, düzenleme, pasif yapma, şifre sıfırlama, silme; herkes kendi şifresini değiştirebilir.
 - [ ] Yapay zekâ ile içerik taslağı: İçerik ekranında "Taslak oluştur". Besin değerleri önce gerçek veri setlerinden: genel ürünler (fındık, leblebi, çekirdek…) için TürKomp (Ulusal Gıda Kompozisyon Veri Tabanı) ve USDA FoodData Central (ücretsiz API, kamu malı); barkodlu markalı ürünler için Open Food Facts. Gemini sadece ürün adını doğru veri seti kaydıyla eşleştirir (ör. "çifte kavrulmuş fındık" → kavrulmuş fındık), içindekiler/alerjen taslağı yazar ve karışımlarda oranlı hesap önerir. Her şey taslak: kullanıcı kontrol edip Kaydet'e basmadan CL'ye/teraziye gitmez; kaynak ekranda yazar. API anahtarları kasada C:\FiyatGor içinde, istekler sunucu üzerinden.
 - [ ] Yemeksepeti ve Trendyol entegrasyonu: siparişleri/ürün-fiyat-stok eşitlemesini kasa sunucusu üzerinden yapmak (Trendyol'un açık satıcı API'si var; Yemeksepeti iş ortağı onayı gerektirir). Ekranlar aynı uygulamaya eklenecek, ayrı masaüstü programı gerekmez.
+- [ ] Fatura sistemi entegrasyonu (e-Fatura / e-Arşiv): satış ya da sepetten fatura kesme, GİB'e özel entegratör üzerinden gönderme. Netleştirilecek: şu an hangi entegratör/program kullanılıyor (Vega'nın kendi e-fatura modülü mü, ayrı bir firma mı), faturalar Vega'da mı kesiliyor, API erişimi var mı. Anahtarlar kasada, istekler sunucu üzerinden.
 
 ### Dükkan sahibi elle yapacak
 - [ ] CL'de aynı ürün kodlu ve fiyatı farklı ürünlerin temizliği (126 kod, 108'inde fiyat farklı; PLU 1000 ve 9994-9999 gibi kopyalar).
 
 ## Tamamlandı
+- [x] Normal kullanıcı hesabı iPhone Safari'de denendi, Ana Ekrana Ekle ile çalışıyor
 - [x] ⚖️ Terazi sekmesi: sadece terazi ürünleri; solda CL PLU (1000 altı, aynı koddakiler alt alta), sağda ad ve fiyat; dokununca Fiyat ekranı (dükkanda denenecek)
 - [x] Öğretici: normal kullanıcıya ilk girişte (telefon başına bir kez) adım adım tanıtım; sadece yetkili olduğu sekmeler anlatılır; Ayarlar → Hesabım → Öğreticiyi başlat ile herkes tekrar açabilir
 - [x] Aramalarda terazi ürünleri (TRZ-) en üstte: tam barkod/PLU/kod eşleşmesi önce, sonra adı aranan kelimeyle başlayan TRZ'ler, diğer TRZ'ler, sonra diğer ürünler
